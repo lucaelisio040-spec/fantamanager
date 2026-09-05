@@ -242,6 +242,24 @@ tr:last-child td{border-bottom:none}
 .sync .led{width:7px;height:7px;border-radius:50%;background:var(--tx-faint);flex:none}
 .sync .led.on{background:var(--good)}
 .sync .led.off{background:var(--bad)}
+/* ---------- ricerca nel listone ---------- */
+.cerca{margin-bottom:15px}
+.cerca label{display:block;font-size:11.5px;color:var(--tx-faint);margin-bottom:3px}
+.cerca input{width:100%}
+.ris{margin-top:5px}
+.ris:not(:empty){border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--bg)}
+.rit{display:grid;grid-template-columns:18px 1fr 38px auto;gap:9px;align-items:center;
+  padding:6px 10px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-size:13px}
+.rit:last-child{border-bottom:none}
+.rit:hover{background:var(--raised)}
+.rit .rl{font-family:'Barlow Condensed';font-weight:700;text-align:center}
+.rit .rn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rit .rc{color:var(--tx-faint);font-size:12px;margin-left:6px}
+.rit .rq{text-align:right;color:var(--tx-dim)}
+.rit .ro{font-size:11.5px;color:var(--tx-faint);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rit .ro b{color:var(--good);font-weight:600}
+.rvoid{padding:9px 11px;font-size:12.5px;color:var(--tx-faint)}
+
 .banner{border:1px solid var(--line);border-left:3px solid var(--info);border-radius:0 6px 6px 0;
   background:var(--panel);padding:10px 14px;margin:14px 0;font-size:13px;color:var(--tx-dim)}
 
@@ -1765,6 +1783,12 @@ function openPlayer(id){
     <div class="mhead"><h3>${isNew ? "Nuovo giocatore" : esc(p.nome)}</h3>
       <div class="s">${esc(sq.nome)}${!isNew && a !== null ? " · " + (a > 0 ? a + " stagioni residue" : "contratto scaduto") : ""}</div></div>
     <div class="mbody">
+      <div class="cerca">
+        <label>Cerca nel listone</label>
+        <input id="mCerca" placeholder="${S.listone.length ? "scrivi il cognome" : "nessun listone caricato"}"
+          autocomplete="off" ${S.listone.length ? "" : "disabled"}>
+        <div id="mRis" class="ris"></div>
+      </div>
       <div class="grid g2">
         <div class="f" style="grid-column:1/-1"><label>Nome</label><input id="mNome" value="${esc(p.nome)}"></div>
         <div class="f"><label>Ruolo</label><select id="mRuolo">${RUOLI.map(r => `<option ${p.ruolo===r?"selected":""}>${r}</option>`).join("")}</select></div>
@@ -1796,6 +1820,36 @@ function openPlayer(id){
   const close = () => document.getElementById("modalHost").innerHTML = "";
   document.getElementById("mAnnulla").onclick = close;
   document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+
+  /* --- ricerca nel listone: riempie i campi con i dati ufficiali --- */
+  const cerca = document.getElementById("mCerca"), ris = document.getElementById("mRis");
+  const mostraRis = () => {
+    const q = norm(cerca.value);
+    if(q.length < 2){ ris.innerHTML = ""; return; }
+    const trovati = S.listone.filter(l => norm(l.nome).includes(q)).slice(0, 8);
+    if(!trovati.length){ ris.innerHTML = `<div class="rvoid">Nessun giocatore con questo nome nel listone.</div>`; return; }
+    ris.innerHTML = trovati.map((l,i) => {
+      const own = proprietario(l.nome);
+      return `<div class="rit" data-i="${i}">
+        <span class="rl" style="color:var(--${l.ruolo})">${l.ruolo}</span>
+        <span class="rn">${esc(l.nome)}<span class="rc">${esc(l.club)}</span></span>
+        <span class="rq">${l.qa ?? "—"}</span>
+        <span class="ro">${own ? esc(own.s.nome) : "<b>libero</b>"}</span></div>`;
+    }).join("");
+    ris.querySelectorAll(".rit").forEach(el => el.onclick = () => {
+      const l = trovati[+el.dataset.i];
+      document.getElementById("mNome").value = l.nome;
+      document.getElementById("mRuolo").value = l.ruolo;
+      document.getElementById("mClub").value = l.club;
+      const pz = document.getElementById("mPrezzo");
+      if(!pz.value || +pz.value <= 1) pz.value = l.qa ?? 1;   // la quotazione è il minimo d'asta
+      document.getElementById("mQuot").placeholder = l.qa ?? "—";
+      cerca.value = ""; ris.innerHTML = "";
+      const own = proprietario(l.nome);
+      if(own) toast(`Attenzione: ${l.nome} risulta già in rosa a ${own.s.nome}`);
+    });
+  };
+  if(cerca) cerca.oninput = mostraRis;
   document.getElementById("mRep").onchange = e => {
     document.getElementById("wrapFascia").style.display = e.target.value === "primavera" ? "" : "none";
   };
