@@ -1021,13 +1021,17 @@ function tabellaListone(righe, conProprietario){
   </div>`;
 }
 
-function zonaImport(){
-  return `<div class="card"><h3>Carica le quotazioni ufficiali</h3>
-    <div class="hint">Su fantacalcio.it, nella pagina Quotazioni e FVM, il pulsante "Scarica" produce un file Excel. Trascinalo qui, oppure premi il pulsante per sceglierlo. Ruoli, club e quotazioni vengono letti da lì, così restano sempre allineati alla fonte.</div>
+function zonaImport(sostituisci){
+  const forzate = S.squadre.reduce((n,s) => n + s.rosa.filter(p => p.quotazione != null).length, 0);
+  return `<div class="card"><h3>${sostituisci ? "Carica un listone aggiornato" : "Carica le quotazioni ufficiali"}</h3>
+    <div class="hint">Su fantacalcio.it, nella pagina Quotazioni e FVM, il pulsante "Scarica" produce un file Excel. Trascinalo qui, oppure premi il pulsante per sceglierlo. Ruoli, club e quotazioni vengono letti da lì, così restano sempre allineati alla fonte.${sostituisci ? " Il listone attuale viene sostituito solo se il nuovo file è leggibile." : ""}</div>
     <div class="dropzone" id="drop">Trascina qui il file, oppure
       <button class="btn" id="btnPickFile" style="margin-left:6px">scegli il file</button></div>
     <input type="file" id="listFile" accept=".xlsx,.xls,.csv" class="hidden">
-    <div class="hint" style="margin:12px 0 0">Ho verificato la pagina il 4 settembre 2026: il listone pubblicato è quello 2026/27, con Frosinone, Monza e Venezia al posto di Cremonese, Empoli e Pisa. Se importi quello mentre le tue rose sono ancora ferme a gennaio 2026, diversi giocatori risulteranno svincolati solo perché hanno cambiato squadra.</div></div>`;
+    ${sostituisci ? `<div class="btnrow">
+        <button class="btn dgr" id="btnRicarica">Svuota il listone</button>
+        ${forzate ? `<button class="btn" id="btnResetTutte">Azzera ${forzate} quotazioni forzate a mano</button>` : ""}
+      </div>` : `<div class="hint" style="margin:12px 0 0">Ho verificato la pagina il 4 settembre 2026: il listone pubblicato è quello 2026/27, con Frosinone, Monza e Venezia al posto di Cremonese, Empoli e Pisa. Se importi quello mentre le tue rose sono ancora ferme a gennaio 2026, diversi giocatori risulteranno svincolati solo perché hanno cambiato squadra.</div>`}</div>`;
 }
 
 function viewListone(){
@@ -1043,7 +1047,7 @@ function viewListone(){
       <div class="stat"><div class="v">${liberi}</div><div class="l">Svincolati</div></div>
     </div></div>
     ${barraListone(true)}${tabellaListone(righe, true)}
-    <div class="btnrow"><button class="btn" id="btnRicarica">Sostituisci il listone</button></div>`;
+    ${zonaImport(true)}`;
 }
 
 function viewSvincolati(){
@@ -1202,10 +1206,12 @@ function leggiListone(file){
                    qa: num(r[iQA]), qi: num(r[iQI]), fvm: num(r[iF]) });
       }
       if(!out.length) throw new Error("Nessun calciatore riconosciuto");
+      const precedente = S.listone.length;
       S.listone = out;
       const titolo = String((grid[0]||[]).filter(Boolean)[0] || "").trim();
       S.listoneInfo = `${out.length} calciatori${titolo ? " · " + titolo : ""} · importato il ${new Date().toLocaleDateString("it-IT")}`;
-      save(); render(); toast(`Listone importato: ${out.length} calciatori`);
+      save(); render();
+      toast(precedente ? `Listone sostituito: ${out.length} calciatori` : `Listone importato: ${out.length} calciatori`);
       setTimeout(proponiAllineamento, 400);
     }catch(err){
       toast("Il file non ha il formato delle quotazioni ufficiali: " + err.message);
@@ -1698,7 +1704,17 @@ function bindView(){
       if(e.dataTransfer.files[0]) leggiListone(e.dataTransfer.files[0]); };
   }
   const rl = document.getElementById("btnRicarica");
-  if(rl) rl.onclick = () => { S.listone = []; S.listoneInfo = null; save(); render(); };
+  if(rl) rl.onclick = () => conferma("Svuotare il listone?",
+    "Le rose non vengono toccate, ma finche non ne carichi un altro le quotazioni spariscono e le riconferme tornano a costare il prezzo d'acquisto.",
+    () => { S.listone = []; S.listoneInfo = null;
+            document.getElementById("modalHost").innerHTML = "";
+            save(); render(); toast("Listone svuotato"); });
+  const rt = document.getElementById("btnResetTutte");
+  if(rt) rt.onclick = () => conferma("Azzerare le quotazioni forzate?",
+    "Ogni valore scritto a mano viene rimosso e tutte le squadre tornano a seguire il listone.",
+    () => { S.squadre.forEach(sq => sq.rosa.forEach(p => p.quotazione = null));
+            document.getElementById("modalHost").innerHTML = "";
+            save(); render(); toast("Quotazioni riallineate al listone"); });
 
   /* --- scambi --- */
   document.querySelectorAll(".tradeteam").forEach(s => s.onchange = () => {
