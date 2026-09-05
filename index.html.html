@@ -1,0 +1,1861 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#101720; --panel:#161F2A; --raised:#1D2733; --line:#2B3745; --line-soft:#232E3B;
+  --tx:#E6ECF2; --tx-dim:#93A5B7; --tx-faint:#63758A;
+  --P:#E9A23B; --D:#63BE4F; --C:#37A8DE; --A:#D8483C;
+  --warn:#E9A23B; --bad:#D8483C; --good:#63BE4F; --info:#37A8DE;
+  --rail:264px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--tx);
+  font-family:'Barlow',system-ui,sans-serif; font-size:14px; line-height:1.45;
+  font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.cond{font-family:'Barlow Condensed','Barlow',sans-serif;letter-spacing:.01em}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:5px 7px;font-variant-numeric:tabular-nums}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--info);outline-offset:1px}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:var(--rail) 1fr;height:100vh;overflow:hidden}
+.rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.main{overflow-y:auto;padding:0 26px 60px}
+
+.brand{padding:16px 18px 13px;border-bottom:1px solid var(--line)}
+.brand h1{font-size:21px;font-weight:700;line-height:1.05;text-transform:uppercase}
+.brand .sub{font-size:12px;color:var(--tx-faint);margin-top:2px}
+.season{display:flex;align-items:center;gap:8px;margin-top:6px}
+.season span{font-family:'Barlow Condensed';font-size:17px;font-weight:600;min-width:76px;text-align:center}
+.season button{width:23px;height:23px;border:1px solid var(--line);border-radius:4px;color:var(--tx-dim);
+  font-size:15px;line-height:1;display:grid;place-items:center}
+.season button:hover:not(:disabled){border-color:var(--info);color:var(--tx)}
+.season button:disabled{opacity:.3;cursor:default}
+.rank{font-family:'Barlow Condensed';font-size:19px;font-weight:700;width:30px}
+.medal{color:var(--warn)}
+tr.me td{background:#17222E}
+
+.railscroll{overflow-y:auto;flex:1;padding:8px 0}
+.railhead{font-size:11px;color:var(--tx-faint);padding:10px 18px 5px;font-weight:600}
+.tbtn{display:block;width:100%;text-align:left;padding:7px 18px;border-left:3px solid transparent;position:relative}
+.tbtn:hover{background:var(--raised)}
+.tbtn.on{background:var(--raised);border-left-color:var(--info)}
+.tbtn .nm{font-family:'Barlow Condensed';font-size:16px;font-weight:600;text-transform:uppercase;line-height:1.2}
+.tbtn .mt{font-size:11.5px;color:var(--tx-faint);display:flex;gap:9px;margin-top:1px}
+.tbtn .dot{position:absolute;right:14px;top:12px;width:7px;height:7px;border-radius:50%}
+.railfoot{border-top:1px solid var(--line);padding:9px 14px;display:flex;gap:7px;flex-wrap:wrap}
+.railfoot button{font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:4px;color:var(--tx-dim)}
+.railfoot button:hover{border-color:var(--info);color:var(--tx)}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:2px;position:sticky;top:0;background:var(--bg);padding:14px 0 0;z-index:20;border-bottom:1px solid var(--line)}
+.tab{padding:7px 15px 9px;font-size:13px;font-weight:600;color:var(--tx-faint);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab:hover{color:var(--tx-dim)}
+.tab.on{color:var(--tx);border-bottom-color:var(--info)}
+
+/* ---------- team header ---------- */
+.thead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:22px 0 16px;flex-wrap:wrap}
+.thead h2{font-size:34px;font-weight:700;text-transform:uppercase;line-height:1}
+.thead .pos{font-size:13px;color:var(--tx-faint);margin-top:3px}
+.stats{display:flex;gap:26px;flex-wrap:wrap}
+.stat .v{font-family:'Barlow Condensed';font-size:26px;font-weight:600;line-height:1}
+.stat .l{font-size:11.5px;color:var(--tx-faint);margin-top:1px}
+
+/* ---------- roster ---------- */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+@media(max-width:1080px){.cols{grid-template-columns:1fr}}
+.block{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel);margin-bottom:16px}
+.bhead{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--raised);border-bottom:1px solid var(--line)}
+.bhead .t{font-family:'Barlow Condensed';font-size:15px;font-weight:600;text-transform:uppercase}
+.bhead .c{font-size:12px;color:var(--tx-faint)}
+.bhead.over .c{color:var(--bad);font-weight:600}
+
+.row{display:grid;grid-template-columns:20px 1fr 74px 62px 30px;gap:9px;align-items:center;
+     padding:5px 12px;border-bottom:1px solid var(--line-soft);cursor:pointer}
+.row:last-child{border-bottom:none}
+.row:hover{background:var(--raised)}
+.row .rl{font-family:'Barlow Condensed';font-weight:700;font-size:14px;text-align:center}
+.row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm b{font-weight:500}
+.row .nm span{color:var(--tx-faint);font-size:12px;margin-left:6px}
+.row .pz{text-align:right;font-size:13px;color:var(--tx-dim)}
+.row .fl{text-align:center;font-size:12px}
+.row.empty{color:var(--tx-faint);font-style:italic;cursor:default}
+.row.empty:hover{background:none}
+
+/* contract clock */
+.clock{display:flex;gap:2px;justify-content:flex-end}
+.seg{width:11px;height:9px;border-radius:1.5px;background:var(--line)}
+.seg.on{background:var(--good)}
+.seg.last{background:var(--warn)}
+.seg.dead{background:var(--bad)}
+
+.pill{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 5px;border-radius:3px;vertical-align:1px}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11.5px;color:var(--tx-faint);font-weight:600;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:13.5px}
+tr:last-child td{border-bottom:none}
+.num{text-align:right}
+
+/* ---------- panels / forms ---------- */
+.card{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:16px 18px;margin-bottom:16px}
+.card h3{font-size:17px;font-weight:600;text-transform:uppercase;margin-bottom:3px}
+.card .hint{font-size:12.5px;color:var(--tx-faint);margin-bottom:13px;max-width:66ch}
+.grid{display:grid;gap:11px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:820px){.g4{grid-template-columns:repeat(2,1fr)}.g2{grid-template-columns:1fr}}
+.f label{display:block;font-size:11.5px;color:var(--tx-faint);margin-bottom:3px}
+.f input,.f select{width:100%}
+.btn{border:1px solid var(--line);border-radius:4px;padding:7px 13px;font-size:13px;font-weight:500;color:var(--tx-dim)}
+.btn:hover{border-color:var(--info);color:var(--tx)}
+.btn.pri{background:var(--info);border-color:var(--info);color:#08131C;font-weight:600}
+.btn.pri:hover{filter:brightness(1.1);color:#08131C}
+.btn.dgr{border-color:#5A2C29;color:#E48278}
+.btn.dgr:hover{background:#2A1614;border-color:var(--bad);color:#FFB3A9}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+
+/* ---------- alerts ---------- */
+.alert{display:flex;gap:11px;align-items:flex-start;padding:9px 12px;border-bottom:1px solid var(--line-soft)}
+.alert:last-child{border-bottom:none}
+.alert .ic{font-size:14px;line-height:1.3}
+.alert .tx b{font-weight:600}
+.alert .tx div{font-size:12.5px;color:var(--tx-faint)}
+.ok-empty{padding:15px 12px;color:var(--tx-faint);font-size:13px}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(8,12,18,.72);display:flex;align-items:center;justify-content:center;padding:20px;z-index:100}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:8px;width:min(480px,100%);max-height:88vh;overflow-y:auto}
+.mhead{padding:15px 20px 12px;border-bottom:1px solid var(--line)}
+.mhead h3{font-size:21px;font-weight:600}
+.mhead .s{font-size:12.5px;color:var(--tx-faint)}
+.mbody{padding:16px 20px}
+.mfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--raised);
+  border:1px solid var(--line);border-radius:5px;padding:9px 16px;font-size:13px;z-index:200}
+@media(prefers-reduced-motion:no-preference){.toast{animation:up .18s ease-out}}
+@keyframes up{from{opacity:0;transform:translate(-50%,7px)}}
+.hidden{display:none!important}
+
+/* ---------- scambi ---------- */
+.trade{display:grid;grid-template-columns:1fr 46px 1fr;gap:14px;align-items:start}
+@media(max-width:900px){.trade{grid-template-columns:1fr}.tradearrow{display:none}}
+.tradearrow{align-self:center;text-align:center;color:var(--tx-faint);font-size:20px;padding-top:60px}
+.side{border:1px solid var(--line);border-radius:6px;background:var(--panel);overflow:hidden}
+.side header{padding:10px 12px;background:var(--raised);border-bottom:1px solid var(--line)}
+.side header select{width:100%;font-family:'Barlow Condensed';font-size:16px;font-weight:600;text-transform:uppercase}
+.side .meta{font-size:11.5px;color:var(--tx-faint);margin-top:5px;display:flex;gap:11px;flex-wrap:wrap}
+.pickrow{display:flex;gap:6px;flex-wrap:wrap;padding:9px 12px;border-bottom:1px solid var(--line-soft)}
+.chip{border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:11.5px;color:var(--tx-dim)}
+.chip.on{background:var(--info);border-color:var(--info);color:#08131C;font-weight:600}
+.chip:hover{border-color:var(--info)}
+.pk{max-height:210px;overflow-y:auto}
+.selrow{display:grid;grid-template-columns:18px 20px 1fr 54px;gap:8px;align-items:center;
+  padding:4px 12px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-size:13px}
+.selrow:hover{background:var(--raised)}
+.selrow.on{background:#17303F}
+.balance{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:13px 16px;margin-top:16px}
+.bal{display:flex;gap:18px;flex-wrap:wrap;font-size:13px}
+.bal span b{font-family:'Barlow Condensed';font-size:17px}
+.err{color:#F0968C;font-size:13px;margin-top:9px}
+.okmsg{color:#8FD97C;font-size:13px;margin-top:9px}
+
+/* ---------- listone ---------- */
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.toolbar input[type=search]{min-width:210px}
+.owner{font-size:11.5px;color:var(--tx-faint)}
+.free{color:var(--good);font-weight:600;font-size:11.5px}
+.dropzone{border:1px dashed var(--line);border-radius:6px;padding:26px 20px;text-align:center;color:var(--tx-faint);font-size:13.5px}
+.dropzone.hot{border-color:var(--info);color:var(--tx-dim)}
+
+/* ---------- legenda fasce ---------- */
+.legenda{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:9px 12px;
+  border:1px solid var(--line);border-radius:6px;background:var(--panel);margin-bottom:14px;font-size:12.5px}
+.legenda .lf{display:flex;align-items:center;gap:6px;color:var(--tx-dim)}
+.legenda .lf i{font-style:normal;color:var(--tx-faint)}
+.legenda .lf.note{color:var(--tx-faint);margin-left:auto}
+.fa{font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px}
+.fa.U23{background:#243542;color:#9CC4DA}
+.fa.U22{background:#2A2036;color:#C89BE8}
+.fa.U21{background:#1E3324;color:#8FD97C}
+.fa.U20{background:#1E3324;color:#8FD97C}
+
+/* ---------- lavagna draft ---------- */
+.giro{border:1px solid var(--line);border-radius:6px;background:var(--panel);margin-bottom:12px;overflow:hidden}
+.giro>header{padding:7px 12px;background:var(--raised);border-bottom:1px solid var(--line);
+  font-family:'Barlow Condensed';font-size:14px;font-weight:600;text-transform:uppercase;
+  display:flex;justify-content:space-between}
+.pcell{display:grid;grid-template-columns:34px 1fr 1fr auto;gap:10px;align-items:center;
+  padding:5px 12px;border-bottom:1px solid var(--line-soft);font-size:13px}
+.pcell:last-child{border-bottom:none}
+.pcell .n{font-family:'Barlow Condensed';font-weight:700;font-size:15px;color:var(--tx-faint)}
+.pcell .via{color:var(--tx-faint);font-size:12px}
+.pcell.presa{background:#16232E}
+.pcell button{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:4px;color:var(--tx-dim)}
+.pcell button:hover{border-color:var(--info);color:var(--tx)}
+.pkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.pkcard{border:1px solid var(--line);border-radius:6px;background:var(--panel);overflow:hidden}
+.pkcard header{padding:8px 11px;background:var(--raised);border-bottom:1px solid var(--line);
+  font-family:'Barlow Condensed';font-size:15px;font-weight:600;text-transform:uppercase}
+.pkcard .anno{padding:7px 11px;border-bottom:1px solid var(--line-soft)}
+.pkcard .anno:last-child{border-bottom:none}
+.pkcard .anno .y{font-size:11px;color:var(--tx-faint);margin-bottom:4px}
+.pkcard .anno .cs{display:flex;gap:5px;flex-wrap:wrap}
+.pkc{font-size:11.5px;border:1px solid var(--line);border-radius:11px;padding:1px 8px;color:var(--tx-dim)}
+.pkc.acq{border-color:#2F5A3A;background:#16261C;color:#8FD97C}
+.pkc.usata{opacity:.45;text-decoration:line-through}
+
+/* ---------- accesso ---------- */
+.gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding:20px;z-index:300}
+.gatebox{width:min(400px,100%);border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:26px 28px}
+.gatebox h1{font-size:27px;font-weight:700;text-transform:uppercase;line-height:1}
+.gatebox p{font-size:13px;color:var(--tx-faint);margin:7px 0 18px}
+.gatebox input{width:100%;font-size:15px;padding:9px 11px;letter-spacing:.02em}
+.gatebox .btn{width:100%;margin-top:11px;padding:9px}
+.gatebox .msg{font-size:13px;margin-top:11px;min-height:18px}
+
+/* ---------- stato collegamento ---------- */
+.sync{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--tx-faint);padding:7px 18px;border-top:1px solid var(--line)}
+.sync .led{width:7px;height:7px;border-radius:50%;background:var(--tx-faint);flex:none}
+.sync .led.on{background:var(--good)}
+.sync .led.off{background:var(--bad)}
+.banner{border:1px solid var(--line);border-left:3px solid var(--info);border-radius:0 6px 6px 0;
+  background:var(--panel);padding:10px 14px;margin:14px 0;font-size:13px;color:var(--tx-dim)}
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <h1 id="leagueName">Lega</h1>
+      <div class="season">
+        <button id="btnPrev" title="Stagione precedente">‹</button>
+        <span id="seasonLbl"></span>
+        <button id="btnNext" title="Stagione successiva">›</button>
+      </div>
+      <div class="sub" id="teamCount"></div>
+    </div>
+    <div class="railscroll">
+      <div class="railhead">Squadre</div>
+      <div id="teamList"></div>
+    </div>
+    <div class="sync"><span class="led" id="led"></span><span id="syncTx">non collegato</span></div>
+    <div class="railfoot">
+      <button id="btnExport">Esporta dati</button>
+      <button id="btnImport">Importa</button>
+      <button id="btnReset">Ripristina</button>
+      <input type="file" id="fileIn" accept="application/json" class="hidden">
+    </div>
+  </aside>
+
+  <main class="main">
+    <nav class="tabs">
+      <button class="tab on" data-tab="rosa">Rosa</button>
+      <button class="tab" data-tab="scambi">Scambi</button>
+      <button class="tab hidden" id="tabRich" data-tab="richieste">Richieste</button>
+      <button class="tab" data-tab="riconferme">Riconferme</button>
+      <button class="tab" data-tab="draft">Draft</button>
+      <button class="tab" data-tab="picks">Picks</button>
+      <button class="tab" data-tab="classifica">Classifica</button>
+      <button class="tab" data-tab="storico">Storico</button>
+      <button class="tab" data-tab="listone">Listone</button>
+      <button class="tab" data-tab="svincolati">Svincolati</button>
+      <button class="tab" data-tab="controlli">Controlli</button>
+      <button class="tab" data-tab="regole">Regolamento</button>
+    </nav>
+    <section id="view"></section>
+  </main>
+</div>
+
+<div id="modalHost"></div>
+<div id="toastHost"></div>
+
+<script>
+const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada", "nome": "Anadra Cafonada", "crediti_residui": 0, "posizione": null, "rosa": [{"nome": "Meret", "ruolo": "P", "club": "Napoli", "prezzo": 49, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Milinkovic-Savic V.", "ruolo": "P", "club": "Napoli", "prezzo": 22, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Contini", "ruolo": "P", "club": "Napoli", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bastoni", "ruolo": "D", "club": "Inter", "prezzo": 36, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Diego Carlos", "ruolo": "D", "club": "Como", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Mina", "ruolo": "D", "club": "Cagliari", "prezzo": 2, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bellanova", "ruolo": "D", "club": "Atalanta", "prezzo": 13, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Valeri", "ruolo": "D", "club": "Parma", "prezzo": 2, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Dodò", "ruolo": "D", "club": "Fiorentina", "prezzo": 13, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Comuzzo", "ruolo": "D", "club": "Fiorentina", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Belghali", "ruolo": "D", "club": "Verona", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "De Roon", "ruolo": "C", "club": "Atalanta", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zielinski", "ruolo": "C", "club": "Inter", "prezzo": 23, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Cataldi", "ruolo": "C", "club": "Lazio", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Politano", "ruolo": "C", "club": "Napoli", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zaccagni", "ruolo": "C", "club": "Lazio", "prezzo": 76, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "McKennie", "ruolo": "C", "club": "Juventus", "prezzo": 28, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Samardzic", "ruolo": "C", "club": "Atalanta", "prezzo": 15, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Thuram K.", "ruolo": "C", "club": "Juventus", "prezzo": 16, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Dybala", "ruolo": "A", "club": "Roma", "prezzo": 60, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zapata D.", "ruolo": "A", "club": "Torino", "prezzo": 20, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Openda", "ruolo": "A", "club": "Juventus", "prezzo": 7, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Yildiz", "ruolo": "A", "club": "Juventus", "prezzo": 25, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Pellegrino M.", "ruolo": "A", "club": "Parma", "prezzo": 52, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Kuhn", "ruolo": "A", "club": "Como", "prezzo": 10, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Meister", "club": "Pisa", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Vannucchi", "club": "Fiorentina", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "I. Gueye", "club": "Udinese", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Muharemovic", "club": "Sassuolo", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Comotto", "club": "Milan", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Raimondo", "club": "Bologna", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Corigliano", "club": "Juventus", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Zanoli", "club": "Udinese", "fascia": null, "prezzo": 1, "scadenza": "2028-09-01", "reparto": "fuori_rosa"}]}, {"id": "cani_malati", "nome": "In Tsimikas tutti chef", "crediti_residui": 46, "posizione": null, "rosa": [{"nome": "Sportiello", "ruolo": "P", "club": "Atalanta", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Carnesecchi", "ruolo": "P", "club": "Atalanta", "prezzo": 14, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Suzuki", "ruolo": "P", "club": "Parma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Pezzella Giu.", "ruolo": "D", "club": "Cremonese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Spinazzola", "ruolo": "D", "club": "Napoli", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Mancini", "ruolo": "D", "club": "Roma", "prezzo": 21, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Maripan", "ruolo": "D", "club": "Torino", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bisseck", "ruolo": "D", "club": "Inter", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Heggem", "ruolo": "D", "club": "Bologna", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Troilo", "ruolo": "D", "club": "Parma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zè Pedro", "ruolo": "D", "club": "Cagliari", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Fagioli", "ruolo": "C", "club": "Fiorentina", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Strefezza", "ruolo": "C", "club": "Parma", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Caqueret", "ruolo": "C", "club": "Como", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Harrison", "ruolo": "C", "club": "Fiorentina", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Karlstrom", "ruolo": "C", "club": "Udinese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Konè I.", "ruolo": "C", "club": "Sassuolo", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Rowe", "ruolo": "C", "club": "Bologna", "prezzo": 16, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Sucic P.", "ruolo": "C", "club": "Inter", "prezzo": 17, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Vardy", "ruolo": "A", "club": "Cremonese", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Esposito Se.", "ruolo": "A", "club": "Cagliari", "prezzo": 7, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "David", "ruolo": "A", "club": "Juventus", "prezzo": 156, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Ratkov", "ruolo": "A", "club": "Lazio", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bowie", "ruolo": "A", "club": "Verona", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Kulenovic", "ruolo": "A", "club": "Torino", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Sorensen", "club": "Parma", "fascia": "U23", "prezzo": null, "scadenza": "2026-09-01", "reparto": "primavera"}, {"nome": "Volpato", "club": "Sassuolo", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Giovane", "club": "Napoli", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Addai", "club": "Como", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Venturino", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Miller", "club": "Udinese", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Angori", "club": "Pisa", "fascia": null, "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Arena", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}]}, {"id": "ming", "nome": "Mignottingham Forest", "crediti_residui": 0, "posizione": null, "rosa": [{"nome": "Provedel", "ruolo": "P", "club": "Lazio", "prezzo": 20, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Furlanetto", "ruolo": "P", "club": "Lazio", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Motta", "ruolo": "P", "club": "Lazio", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Juan Jesus", "ruolo": "D", "club": "Napoli", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Lazaro", "ruolo": "D", "club": "Torino", "prezzo": 7, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Kalulu", "ruolo": "D", "club": "Juventus", "prezzo": 16, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gutierrez", "ruolo": "D", "club": "Napoli", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gila", "ruolo": "D", "club": "Lazio", "prezzo": 9, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Coco", "ruolo": "D", "club": "Torino", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Circati", "ruolo": "D", "club": "Parma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Kelly L.", "ruolo": "D", "club": "Juventus", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Rabiot", "ruolo": "C", "club": "Milan", "prezzo": 27, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "De Bruyne", "ruolo": "C", "club": "Napoli", "prezzo": 66, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Lobotka", "ruolo": "C", "club": "Napoli", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gaetano", "ruolo": "C", "club": "Cagliari", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Brescianini", "ruolo": "C", "club": "Fiorentina", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gudmundsson A.", "ruolo": "C", "club": "Fiorentina", "prezzo": 64, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zerbin", "ruolo": "C", "club": "Cremonese", "prezzo": 4, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Ekkelenkamp", "ruolo": "C", "club": "Udinese", "prezzo": 2, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Piccoli", "ruolo": "A", "club": "Fiorentina", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Raspadori", "ruolo": "A", "club": "Atalanta", "prezzo": 60, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Malen", "ruolo": "A", "club": "Roma", "prezzo": 59, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Dia", "ruolo": "A", "club": "Lazio", "prezzo": 15, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "De Ketelaere", "ruolo": "A", "club": "Atalanta", "prezzo": 65, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Vitinha O.", "ruolo": "A", "club": "Genoa", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Doig", "club": "Sassuolo", "fascia": "U23", "prezzo": null, "scadenza": "2026-09-01", "reparto": "primavera"}, {"nome": "Palacios", "club": "Inter", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Provstgaard", "club": "Lazio", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Zelesny", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Tiago Gabriel", "club": "Lecce", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Akinsammiro", "club": "Pisa", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Palacios", "club": "Inter", "fascia": "U21", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Nunziante", "club": "Udinese", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}]}, {"id": "campanati", "nome": "F.C. PorcoDiao", "crediti_residui": 38, "posizione": null, "rosa": [{"nome": "Skorupski", "ruolo": "P", "club": "Bologna", "prezzo": 10, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Ravaglia F.", "ruolo": "P", "club": "Bologna", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Corvi", "ruolo": "P", "club": "Parma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Dimarco", "ruolo": "D", "club": "Inter", "prezzo": 60, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Miranda J.", "ruolo": "D", "club": "Bologna", "prezzo": 1, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Holm", "ruolo": "D", "club": "Juventus", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "De Winter", "ruolo": "D", "club": "Milan", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Baschirotto", "ruolo": "D", "club": "Cremonese", "prezzo": 10, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Valle", "ruolo": "D", "club": "Como", "prezzo": 2, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Veiga D.", "ruolo": "D", "club": "Lecce", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bernasconi", "ruolo": "D", "club": "Atalanta", "prezzo": 7, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Konè M.", "ruolo": "C", "club": "Roma", "prezzo": 21, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Frendrup", "ruolo": "C", "club": "Genoa", "prezzo": 11, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Ederson D.S.", "ruolo": "C", "club": "Atalanta", "prezzo": 15, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Thorstvedt", "ruolo": "C", "club": "Sassuolo", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Perrone", "ruolo": "C", "club": "Como", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Atta", "ruolo": "C", "club": "Udinese", "prezzo": 19, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Tourè I.", "ruolo": "C", "club": "Pisa", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Vergara", "ruolo": "C", "club": "Napoli", "prezzo": 17, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bonazzoli", "ruolo": "A", "club": "Cremonese", "prezzo": 7, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Solomon", "ruolo": "A", "club": "Fiorentina", "prezzo": 9, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Dallinga", "ruolo": "A", "club": "Bologna", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Diao", "ruolo": "A", "club": "Como", "prezzo": 22, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Vaz", "ruolo": "A", "club": "Roma", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Kilicsoy", "ruolo": "A", "club": "Cagliari", "prezzo": 41, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Dominguez", "club": "Bologna", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Fabbian", "club": "Fiorentina", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Ndour", "club": "Fiorentina", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Vural", "club": "Pisa", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Almaviva", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Gabbiani", "club": null, "fascia": null, "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Sangare", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}]}, {"id": "correa_del_nord", "nome": "CORREA DEL NORD", "crediti_residui": 0, "posizione": null, "rosa": [{"nome": "Di Gennaro", "ruolo": "P", "club": "Inter", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Sommer", "ruolo": "P", "club": "Inter", "prezzo": 66, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Martinez Jo.", "ruolo": "P", "club": "Inter", "prezzo": 2, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Djimsiti", "ruolo": "D", "club": "Atalanta", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Akanji", "ruolo": "D", "club": "Inter", "prezzo": 22, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Celik", "ruolo": "D", "club": "Roma", "prezzo": 5, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Kossounou", "ruolo": "D", "club": "Atalanta", "prezzo": 2, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Tavares N.", "ruolo": "D", "club": "Lazio", "prezzo": 15, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Kristensen T.", "ruolo": "D", "club": "Udinese", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Delprato", "ruolo": "D", "club": "Parma", "prezzo": 7, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Edmundsson", "ruolo": "D", "club": "Verona", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Calhanoglu", "ruolo": "C", "club": "Inter", "prezzo": 68, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Zaniolo", "ruolo": "C", "club": "Udinese", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Loftus-Cheek", "ruolo": "C", "club": "Milan", "prezzo": 12, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Koopmeiners", "ruolo": "C", "club": "Juventus", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "El Aynaoui", "ruolo": "C", "club": "Roma", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Fadera", "ruolo": "C", "club": "Sassuolo", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Baturina", "ruolo": "C", "club": "Como", "prezzo": 19, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Santos A.", "ruolo": "C", "club": "Napoli", "prezzo": 16, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Fullkrug", "ruolo": "A", "club": "Milan", "prezzo": 15, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Colombo", "ruolo": "A", "club": "Genoa", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Moreo", "ruolo": "A", "club": "Pisa", "prezzo": 7, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Hojlund", "ruolo": "A", "club": "Napoli", "prezzo": 145, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Orban G.", "ruolo": "A", "club": "Verona", "prezzo": 14, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Rodriguez Je.", "ruolo": "A", "club": "Como", "prezzo": 31, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Luvumbo", "club": "Cagliari", "fascia": "U23", "prezzo": null, "scadenza": "2026-09-01", "reparto": "primavera"}, {"nome": "Mussolini", "club": "Cremonese", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Ahanor", "club": "Atalanta", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Fortini", "club": "Fiorentina", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Ilkhan", "club": "Torino", "fascia": "U20", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Tiago Romano", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Finocchiaro", "club": "Juventus", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}]}, {"id": "kebab01", "nome": "Kebab01", "crediti_residui": 4, "posizione": null, "rosa": [{"nome": "Perin", "ruolo": "P", "club": "Juventus", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Caprile", "ruolo": "P", "club": "Cagliari", "prezzo": 7, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Di Gregorio", "ruolo": "P", "club": "Juventus", "prezzo": 39, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bremer", "ruolo": "D", "club": "Juventus", "prezzo": 45, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Gabbia", "ruolo": "D", "club": "Milan", "prezzo": 5, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Rrahmani", "ruolo": "D", "club": "Napoli", "prezzo": 19, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Vasquez", "ruolo": "D", "club": "Genoa", "prezzo": 13, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Ghilardi", "ruolo": "D", "club": "Roma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Ramon", "ruolo": "D", "club": "Como", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Solet", "ruolo": "D", "club": "Udinese", "prezzo": 14, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Bella-Kotchap", "ruolo": "D", "club": "Verona", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Odgaard", "ruolo": "C", "club": "Bologna", "prezzo": 20, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Adopo", "ruolo": "C", "club": "Cagliari", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zhegrova", "ruolo": "C", "club": "Juventus", "prezzo": 40, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Casadei", "ruolo": "C", "club": "Torino", "prezzo": 13, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Isaksen", "ruolo": "C", "club": "Lazio", "prezzo": 15, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Paz N.", "ruolo": "C", "club": "Como", "prezzo": 21, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Conceicao", "ruolo": "C", "club": "Juventus", "prezzo": 36, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Keita M.", "ruolo": "C", "club": "Parma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Kean", "ruolo": "A", "club": "Fiorentina", "prezzo": 32, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Cambiaghi", "ruolo": "A", "club": "Bologna", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Leao", "ruolo": "A", "club": "Milan", "prezzo": 128, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Cancellieri", "ruolo": "A", "club": "Lazio", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Castro S.", "ruolo": "A", "club": "Bologna", "prezzo": 19, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Stojilkovic", "ruolo": "A", "club": "Pisa", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Miretti", "club": "Juventus", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Vlahovic", "club": "Atalanta", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Pio Esposito", "club": "Inter", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Elimoghale", "club": "Juventus", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Adzic", "club": "Juventus", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Martinelli", "club": "Fiorentina", "fascia": "U20", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Lorran", "club": "Pisa", "fascia": null, "prezzo": 3, "scadenza": "2028-09-01", "reparto": "fuori_rosa"}]}, {"id": "ceccocaina_club", "nome": "Ceccocaina Clabbe", "crediti_residui": 0, "posizione": null, "rosa": [{"nome": "Terracciano", "ruolo": "P", "club": "Milan", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Maignan", "ruolo": "P", "club": "Milan", "prezzo": 50, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Torriani", "ruolo": "P", "club": "Milan", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gosens", "ruolo": "D", "club": "Fiorentina", "prezzo": 30, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Marusic", "ruolo": "D", "club": "Lazio", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Martin", "ruolo": "D", "club": "Genoa", "prezzo": 10, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Zortea", "ruolo": "D", "club": "Bologna", "prezzo": 16, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Gallo", "ruolo": "D", "club": "Lecce", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Angelino", "ruolo": "D", "club": "Roma", "prezzo": 2, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Dumfries", "ruolo": "D", "club": "Inter", "prezzo": 20, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Idzes", "ruolo": "D", "club": "Sassuolo", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Locatelli", "ruolo": "C", "club": "Juventus", "prezzo": 2, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Mazzitelli", "ruolo": "C", "club": "Cagliari", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Pulisic", "ruolo": "C", "club": "Milan", "prezzo": 73, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Maldini", "ruolo": "C", "club": "Lazio", "prezzo": 9, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Vlasic", "ruolo": "C", "club": "Torino", "prezzo": 15, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Oristanio", "ruolo": "C", "club": "Parma", "prezzo": 12, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Zaragoza", "ruolo": "C", "club": "Roma", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gandelman", "ruolo": "C", "club": "Lecce", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Thuram", "ruolo": "A", "club": "Inter", "prezzo": 165, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Banda", "ruolo": "A", "club": "Lecce", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bonny", "ruolo": "A", "club": "Inter", "prezzo": 7, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Douvikas", "ruolo": "A", "club": "Como", "prezzo": 14, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Buksa", "ruolo": "A", "club": "Udinese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Durosinmi", "ruolo": "A", "club": "Pisa", "prezzo": 11, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Marcandalli", "club": "Genoa", "fascia": "U23", "prezzo": null, "scadenza": "2026-09-01", "reparto": "primavera"}, {"nome": "Terraciano", "club": "Cremonese", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Frigan", "club": "Parma", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Palma", "club": "Udinese", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Bravo", "club": "Udinese", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Buffon", "club": "Pisa", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Otoa", "club": "Genoa", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Terraciano", "club": "Milan", "fascia": "U21", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Britshghi", "club": "Parma", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}]}, {"id": "sborring_lisb", "nome": "Chemist Lisbona", "crediti_residui": 6, "posizione": null, "rosa": [{"nome": "Gollini", "ruolo": "P", "club": "Roma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Montipò", "ruolo": "P", "club": "Verona", "prezzo": 1, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Svilar", "ruolo": "P", "club": "Roma", "prezzo": 15, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Caracciolo A.", "ruolo": "D", "club": "Pisa", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Buongiorno", "ruolo": "D", "club": "Napoli", "prezzo": 16, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Vojvoda", "ruolo": "D", "club": "Como", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Pavlovic", "ruolo": "D", "club": "Milan", "prezzo": 10, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Cambiaso", "ruolo": "D", "club": "Juventus", "prezzo": 33, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Kempf", "ruolo": "D", "club": "Como", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Nelsson", "ruolo": "D", "club": "Verona", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Wesley", "ruolo": "D", "club": "Roma", "prezzo": 41, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Mandragora", "ruolo": "C", "club": "Fiorentina", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Orsolini", "ruolo": "C", "club": "Bologna", "prezzo": 82, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zambo Anguissa", "ruolo": "C", "club": "Napoli", "prezzo": 15, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Elmas", "ruolo": "C", "club": "Napoli", "prezzo": 11, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Tramoni M.", "ruolo": "C", "club": "Pisa", "prezzo": 15, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zalewski", "ruolo": "C", "club": "Atalanta", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Vandeputte", "ruolo": "C", "club": "Cremonese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Taylor K.", "ruolo": "C", "club": "Lazio", "prezzo": 12, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Lukaku", "ruolo": "A", "club": "Napoli", "prezzo": 18, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Boga", "ruolo": "A", "club": "Juventus", "prezzo": 5, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Soulè", "ruolo": "A", "club": "Roma", "prezzo": 20, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Ferguson E.", "ruolo": "A", "club": "Roma", "prezzo": 133, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Krstovic", "ruolo": "A", "club": "Atalanta", "prezzo": 20, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Cheddira", "ruolo": "A", "club": "Lecce", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Sulemana", "club": "Bologna", "fascia": "U23", "prezzo": null, "scadenza": "2026-09-01", "reparto": "primavera"}, {"nome": "Bertola", "club": "Udinese", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Goglizidce", "club": "Empoli", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Mohamed", "club": null, "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Vignato", "club": "Monza", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Bonfanti", "club": "Pisa", "fascia": null, "prezzo": null, "scadenza": null, "reparto": "primavera"}, {"nome": "Northon-Cuffy", "club": "Genoa", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "De pieri", "club": null, "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}]}, {"id": "as_rabbit", "nome": "A.S. Rabbit", "crediti_residui": 1, "posizione": null, "rosa": [{"nome": "Falcone", "ruolo": "P", "club": "Lecce", "prezzo": 9, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Okoye", "ruolo": "P", "club": "Udinese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Butez", "ruolo": "P", "club": "Como", "prezzo": 11, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Romagnoli", "ruolo": "D", "club": "Lazio", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zappacosta", "ruolo": "D", "club": "Atalanta", "prezzo": 13, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Tomori", "ruolo": "D", "club": "Milan", "prezzo": 20, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Hermoso", "ruolo": "D", "club": "Roma", "prezzo": 8, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Scalvini", "ruolo": "D", "club": "Atalanta", "prezzo": 8, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Ostigard", "ruolo": "D", "club": "Genoa", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Olivera", "ruolo": "D", "club": "Napoli", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Carlos Augusto", "ruolo": "D", "club": "Inter", "prezzo": 6, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Pellegrini Lo.", "ruolo": "C", "club": "Roma", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Cristante", "ruolo": "C", "club": "Roma", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Modric", "ruolo": "C", "club": "Milan", "prezzo": 17, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Frattesi", "ruolo": "C", "club": "Inter", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Malinovskyi", "ruolo": "C", "club": "Genoa", "prezzo": 7, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "McTominay", "ruolo": "C", "club": "Napoli", "prezzo": 50, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Baldanzi", "ruolo": "C", "club": "Genoa", "prezzo": 2, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Bernabè", "ruolo": "C", "club": "Parma", "prezzo": 4, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Pinamonti", "ruolo": "A", "club": "Sassuolo", "prezzo": 59, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Scamacca", "ruolo": "A", "club": "Atalanta", "prezzo": 35, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Pedro", "ruolo": "A", "club": "Lazio", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Martinez L.", "ruolo": "A", "club": "Inter", "prezzo": 212, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Davis K.", "ruolo": "A", "club": "Udinese", "prezzo": 11, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Sulemana K.", "ruolo": "A", "club": "Atalanta", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Lovik", "club": "Parma", "fascia": "U22", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Ziolkowski", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Lipani", "club": "Sassuolo", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}, {"nome": "Mbambi", "club": "Pisa", "fascia": "U20", "prezzo": null, "scadenza": "2029-09-01", "reparto": "primavera"}]}, {"id": "rosanborg", "nome": "Rosanborg", "crediti_residui": 6, "posizione": null, "rosa": [{"nome": "Audero", "ruolo": "P", "club": "Cremonese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Silvestri", "ruolo": "P", "club": "Cremonese", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "De Gea", "ruolo": "P", "club": "Fiorentina", "prezzo": 16, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Di Lorenzo", "ruolo": "D", "club": "Napoli", "prezzo": 38, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "N'Dicka", "ruolo": "D", "club": "Roma", "prezzo": 10, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Zappa", "ruolo": "D", "club": "Cagliari", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gatti", "ruolo": "D", "club": "Juventus", "prezzo": 10, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Hien", "ruolo": "D", "club": "Atalanta", "prezzo": 11, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Beukema", "ruolo": "D", "club": "Napoli", "prezzo": 8, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Bartesaghi", "ruolo": "D", "club": "Milan", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Gaspar K.", "ruolo": "D", "club": "Lecce", "prezzo": 9, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Barella", "ruolo": "C", "club": "Inter", "prezzo": 60, "scadenza": "2027-09-01", "reparto": "prima"}, {"nome": "Saelemaekers", "ruolo": "C", "club": "Milan", "prezzo": 22, "scadenza": "2026-09-01", "reparto": "prima"}, {"nome": "Coulibaly L.", "ruolo": "C", "club": "Lecce", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Da Cunha", "ruolo": "C", "club": "Como", "prezzo": 3, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Aebischer", "ruolo": "C", "club": "Pisa", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Neres", "ruolo": "C", "club": "Napoli", "prezzo": 15, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Ondrejka", "ruolo": "C", "club": "Parma", "prezzo": 5, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Jashari", "ruolo": "C", "club": "Milan", "prezzo": 9, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Berardi", "ruolo": "A", "club": "Sassuolo", "prezzo": 139, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Simeone", "ruolo": "A", "club": "Torino", "prezzo": 1, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Vlahovic", "ruolo": "A", "club": "Juventus", "prezzo": 63, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Nkunku", "ruolo": "A", "club": "Milan", "prezzo": 92, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Laurientè", "ruolo": "A", "club": "Sassuolo", "prezzo": 12, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Adams C.", "ruolo": "A", "club": "Torino", "prezzo": 9, "scadenza": "2028-09-01", "reparto": "prima"}, {"nome": "Zeroli", "club": "Milan", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Stankovic", "club": "Inter", "fascia": "U21", "prezzo": null, "scadenza": "2026-09-01", "reparto": "primavera"}, {"nome": "Palestra", "club": "Atalanta", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Chaka traore", "club": "Milan", "fascia": "U20", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Anghele", "club": "Juventus", "fascia": "U20", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}, {"nome": "Pisilli", "club": "Roma", "fascia": "U20", "prezzo": null, "scadenza": "2027-09-01", "reparto": "primavera"}, {"nome": "Athekame", "club": "Milan", "fascia": "U21", "prezzo": null, "scadenza": "2028-09-01", "reparto": "primavera"}]}]};
+// cambia a ogni aggiornamento delle rose incorporate: serve ad accorgersi
+// che i dati salvati in locale sono più vecchi di quelli del file
+const DATA_VERSION = "2026-07-21c";
+
+const REGOLE_DEFAULT = {
+  budget: 500,
+  rosa: { P:3, D:8, C:8, A:6 },
+  slotPrimavera: 8,
+  slotFascia: { U23:1, U22:2, "U21/U20":5 },
+  durataPrima: 3,
+  durataPrimavera: { U23:1, U22:2, U21:3, U20:4 },
+  riconferme: { 1:8, 2:9, 3:10, default:11 },
+  lottery: { 10:25, 9:20, 8:17, 7:14, 6:11, 5:8, 4:5 },
+  pareggioRuoli: true,      // negli scambi ogni reparto deve restare in pari
+  stagioniPick: 3,          // annate di picks disponibili allo scambio
+  giriPick: 8               // giri per annata, uno per slot del vivaio
+};
+
+const RUOLI = ["P","D","C","A"];
+const RUOLO_NOME = { P:"Portieri", D:"Difensori", C:"Centrocampisti", A:"Attaccanti" };
+const FASCE = ["U23","U22","U21","U20"];
+
+let S = null;              // stato applicativo
+let sel = 0;               // squadra selezionata
+let tab = "rosa";
+const KEY = "fantamanager:v1";
+const CODICE_KEY = "fantamanager:codice";
+
+/* ================= COLLEGAMENTO ================= */
+const SUPA_URL = "https://vtzruiplnoycwequhvay.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0enJ1aXBsbm95Y3dlcXVodmF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1OTcyNDMsImV4cCI6MjEwNDE3MzI0M30.Zme-ad7fSBmp-dzDIzZBIp4cEDeLMZTXt4j-haOMTiA";
+
+let db = null;              // client Supabase
+let codice = null;          // codice di accesso di chi sta usando l'app
+let io = null;              // { squadra_id, nome, admin }
+let versione = 0;           // versione dello stato condiviso, per non sovrascrivere
+let collegato = false;
+let azioni = [];            // richieste in attesa, viste dall'amministratore
+
+const sonoAdmin = () => !!(io && io.admin);
+const miaSquadra = () => S.squadre.find(s => s.id === io?.squadra_id);
+
+function apriDb(){
+  if(!db && window.supabase) db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+  return db;
+}
+
+async function entra(cod){
+  apriDb();
+  if(!db) throw new Error("Libreria di collegamento non caricata");
+  const { data, error } = await db.rpc("chi_sono", { p_codice: cod });
+  if(error) throw error;
+  if(!data || !data.length) throw new Error("Codice non riconosciuto");
+  codice = cod; io = data[0];
+  try{ await window.storage.set(CODICE_KEY, cod); }catch(e){}
+  return io;
+}
+
+async function scaricaStato(){
+  const { data, error } = await db.from("stato").select("dati,versione").eq("id",1).maybeSingle();
+  if(error) throw error;
+  if(!data) return null;
+  versione = data.versione;
+  return migra(data.dati);
+}
+
+// solo l'amministratore scrive; la versione attesa impedisce sovrascritture incrociate
+async function inviaStato(){
+  if(!sonoAdmin() || !collegato) return;
+  const { data, error } = await db.rpc("salva_stato",
+    { p_codice: codice, p_dati: S, p_versione: versione });
+  if(error){
+    toast(error.message.includes("cambiato nel frattempo")
+      ? "Lo stato è cambiato altrove: ricarica la pagina prima di salvare"
+      : "Salvataggio non riuscito: " + error.message);
+    return;
+  }
+  versione = data;
+}
+
+async function caricaAzioni(){
+  if(!collegato) return;
+  const { data } = await db.from("azioni").select("*").eq("esito","in_attesa").order("creata");
+  azioni = data || [];
+}
+
+function ascolta(){
+  if(!db) return;
+  db.channel("lega")
+    .on("postgres_changes", { event:"*", schema:"public", table:"stato" }, async () => {
+      if(sonoAdmin()) return;                 // l'admin è la fonte, non si riallinea a sé stesso
+      const nuovo = await scaricaStato();
+      if(nuovo){ S = nuovo; render(); toast("Dati aggiornati dall'amministratore"); }
+    })
+    .on("postgres_changes", { event:"*", schema:"public", table:"azioni" }, async () => {
+      await caricaAzioni();
+      if(sonoAdmin()) render();
+    })
+    .subscribe();
+}
+
+async function load(){
+  try{
+    const r = await window.storage.get(KEY);
+    if(r && r.value) return migra(JSON.parse(r.value));
+  }catch(e){ /* prima apertura: nessuna copia locale */ }
+  return freshState();
+}
+
+/* ================= stato ================= */
+function freshState(){
+  const d = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  d.regole = JSON.parse(JSON.stringify(REGOLE_DEFAULT));
+  d.annoStagione = 2025;                       // stagione 2025/26
+  d.listone = [];                              // si popola importando le quotazioni ufficiali
+  d.listoneInfo = null;
+  d.squadre.forEach((s,i) => {
+    s.posizione = s.posizione ?? null;
+    s.rosa.forEach(p => { if(!p.id) p.id = uid(); });
+  });
+  d.picks = generaPicks(d);
+  d.scambi = [];
+  d.dataVersion = DATA_VERSION;
+  return d;
+}
+
+// ogni squadra parte proprietaria delle proprie picks, per le annate a venire
+function generaPicks(d){
+  const out = [];
+  for(let a = 1; a <= d.regole.stagioniPick; a++){
+    const anno = d.annoStagione + a;
+    d.squadre.forEach(s => {
+      for(let g = 1; g <= d.regole.giriPick; g++)
+        out.push({ id:uid(), anno, giro:g, origine:s.id, possessore:s.id });
+    });
+  }
+  return out;
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+// i salvataggi della prima versione non conoscono listone, picks e scambi
+function migra(d){
+  const rd = REGOLE_DEFAULT;
+  d.regole = Object.assign({}, rd, d.regole || {});
+  d.listone = d.listone || [];
+  d.listoneInfo = d.listoneInfo ?? null;
+  d.scambi = d.scambi || [];
+  if(!d.picks || !d.picks.length) d.picks = generaPicks(d);
+  d.archivio = d.archivio || [];
+  return d;
+}
+
+// se il file porta rose più recenti di quelle salvate, lo dico invece di ignorarle
+function datiVecchi(){ return S.dataVersion !== DATA_VERSION; }
+
+function proponiAggiornamento(){
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
+    <div class="mhead"><h3>Ci sono rose più recenti</h3>
+      <div class="s">Questo file contiene l'export ufficiale del 21 luglio 2026.</div></div>
+    <div class="mbody"><div class="hint" style="margin:0">
+      Stai lavorando su una copia salvata in precedenza, quindi le rose che vedi sono quelle vecchie.
+      Caricando le nuove, le modifiche fatte finora andranno perse: se ti servono, esportale prima e reimportale dopo.
+    </div></div>
+    <div class="mfoot">
+      <button class="btn" id="uEsporta">Esporta prima</button>
+      <button class="btn" id="uNo">Resto su queste</button>
+      <button class="btn pri" id="uSi">Carica le rose nuove</button>
+    </div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("uNo").onclick = () => { S.dataVersion = DATA_VERSION; save(); close(); };
+  document.getElementById("uEsporta").onclick = esportaDati;
+  document.getElementById("uSi").onclick = () => {
+    S = freshState(); sel = 0; close(); save(); render();
+    toast("Rose aggiornate al 21 luglio 2026");
+  };
+}
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try{ await window.storage.set(KEY, JSON.stringify(S)); }catch(e){}
+    await inviaStato();          // solo l'amministratore scrive sul database
+  }, 350);
+}
+
+/* ================= calcoli ================= */
+const team = () => S.squadre[sel];
+
+function anniResidui(p){
+  if(!p.scadenza) return null;
+  return +p.scadenza.slice(0,4) - S.annoStagione;
+}
+function durataMax(p){
+  if(p.reparto === "primavera" && p.fascia){
+    const f = p.fascia === "U21/U20" ? "U21" : p.fascia;
+    return S.regole.durataPrimavera[f] ?? S.regole.durataPrima;
+  }
+  return S.regole.durataPrima;
+}
+function fuoriSerieA(p){ return !p.club; }
+
+// un giocatore è riconfermabile se resta almeno una stagione oltre quella corrente
+function riconfermabile(p){
+  const a = anniResidui(p);
+  return p.reparto === "prima" && a !== null && a >= 2 && !fuoriSerieA(p);
+}
+// indice per nome del listone, ricostruito solo quando il listone cambia
+let _idx = null, _idxSrc = null;
+function indiceListone(){
+  if(_idx && _idxSrc === S.listone) return _idx;
+  _idxSrc = S.listone;
+  _idx = (S.listone || []).map(l => ({ k: norm(l.nome), l }));
+  return _idx;
+}
+function voceListone(p){
+  const x = norm(p.nome);
+  if(!x) return null;
+  const idx = indiceListone();
+  return idx.find(e => e.k === x)?.l
+      || idx.find(e => e.k.startsWith(x + " ") || x.startsWith(e.k + " "))?.l
+      || null;
+}
+// la quotazione ufficiale vale come riferimento, salvo un valore forzato a mano
+function quotazioneUfficiale(p){ const l = voceListone(p); return l ? l.qa : null; }
+function quotazione(p){ return p.quotazione ?? quotazioneUfficiale(p); }
+
+function costoRiconferma(p){
+  return Math.max(p.prezzo || 0, quotazione(p) ?? 0);
+}
+function nRiconferme(sq){
+  const r = S.regole.riconferme;
+  return (sq.posizione && r[sq.posizione] != null) ? r[sq.posizione] : r.default;
+}
+function reparto(sq, r){ return sq.rosa.filter(p => p.reparto === "prima" && p.ruolo === r); }
+function primavera(sq){ return sq.rosa.filter(p => p.reparto === "primavera"); }
+function fuoriRosa(sq){ return sq.rosa.filter(p => p.reparto === "fuori_rosa"); }
+function occupatiVivaio(sq){ return primavera(sq).length + fuoriRosa(sq).length; }
+function contaFascia(sq, f){
+  return primavera(sq).filter(p => (f === "U21/U20" ? (p.fascia === "U21" || p.fascia === "U20" || p.fascia === "U21/U20") : p.fascia === f)).length;
+}
+function speso(sq){ return sq.rosa.filter(p => p.reparto === "prima").reduce((n,p) => n + (p.prezzo||0), 0); }
+
+/* ---- listone: normalizzazione e abbinamento ---- */
+function norm(s){
+  return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]/g," ").replace(/\s+/g," ").trim();
+}
+// il listone scrive "Milinkovic-Savic V.", il foglio scrive "Milinkovic-savic":
+// confronto normalizzato, poi ripiego sul prefisso più lungo
+function stessoGiocatore(a,b){
+  const x = norm(a), y = norm(b);
+  if(!x || !y) return false;
+  if(x === y) return true;
+  return x.startsWith(y + " ") || y.startsWith(x + " ");
+}
+function tuttiTesserati(){
+  const out = [];
+  S.squadre.forEach(s => s.rosa.forEach(p => out.push({ p, s })));
+  return out;
+}
+function proprietario(nomeListone){
+  return tuttiTesserati().find(t => stessoGiocatore(nomeListone, t.p.nome));
+}
+function svincolati(){
+  const t = tuttiTesserati();
+  return S.listone.filter(l => !t.some(x => stessoGiocatore(l.nome, x.p.nome)));
+}
+
+/* ---- picks ---- */
+function picksDi(idSquadra){
+  return S.picks.filter(p => p.possessore === idSquadra)
+    .sort((a,b) => a.anno - b.anno || a.giro - b.giro);
+}
+function nomeSquadra(id){ return (S.squadre.find(s => s.id === id) || {}).nome || "?"; }
+function etichettaPick(pk){
+  const base = `${pk.giro}º ${pk.anno}`;
+  return pk.origine === pk.possessore ? base : `${base} (via ${nomeSquadra(pk.origine)})`;
+}
+// anno del prossimo draft: si tiene prima dell'asta della stagione entrante
+function annoDraft(){ return S.annoStagione + 1; }
+function pickDi(anno, giro, origineId){
+  return S.picks.find(p => p.anno === anno && p.giro === giro && p.origine === origineId);
+}
+// a quale annata di nascita corrisponde ogni fascia, per la stagione indicata
+function fasceAnno(anno){
+  return [["U23", anno-23, "23 anni"], ["U22", anno-22, "22 anni"],
+          ["U21", anno-21, "21 anni"], ["U20", anno-20, "20 anni o meno"]];
+}
+function legendaFasce(anno, extra){
+  return `<div class="legenda">
+    ${fasceAnno(anno).map(([f,y,e]) =>
+      `<span class="lf"><b class="fa ${f}">${f}</b> nati nel ${y}${f==="U20"?" o dopo":""} <i>${e}</i></span>`).join("")}
+    <span class="lf note">stagione ${anno}/${String(anno+1).slice(2)}${extra ? " · " + extra : ""}</span></div>`;
+}
+
+function problemi(sq){
+  const out = [];
+  RUOLI.forEach(r => {
+    const n = reparto(sq,r).length, lim = S.regole.rosa[r];
+    if(n !== lim) out.push({ lv: n > lim ? "bad":"warn", t:`${RUOLO_NOME[r]}: ${n} su ${lim}`, d: n>lim ? "Reparto oltre il limite" : "Reparto incompleto" });
+  });
+  const occ = occupatiVivaio(sq);
+  if(occ > S.regole.slotPrimavera) out.push({ lv:"bad", t:`Vivaio: ${occ} su ${S.regole.slotPrimavera} slot`, d:"Servono svincoli o promozioni per rientrare" });
+  Object.entries(S.regole.slotFascia).forEach(([f,lim]) => {
+    const n = contaFascia(sq,f);
+    if(n > lim) out.push({ lv:"bad", t:`Fascia ${f}: ${n} su ${lim}`, d:"Limite di fascia superato" });
+  });
+  sq.rosa.forEach(p => {
+    const a = anniResidui(p);
+    if(a === null) out.push({ lv:"warn", t:p.nome, d:"Scadenza contratto non impostata" });
+    else if(a <= 0) out.push({ lv:"bad", t:p.nome, d:`Contratto scaduto il 1/09/${p.scadenza.slice(0,4)}` });
+    else if(a === 1 && p.reparto === "prima") out.push({ lv:"info", t:p.nome, d:"Ultima stagione, non riconfermabile a settembre" });
+    if(fuoriSerieA(p)) out.push({ lv:"warn", t:p.nome, d:"Fuori dalla Serie A, libera subito lo slot" });
+  });
+  return out;
+}
+
+/* ================= rendering ================= */
+function render(){
+  document.getElementById("leagueName").textContent = "Fantamanager";
+  document.getElementById("seasonLbl").textContent = `${S.annoStagione}/${String(S.annoStagione+1).slice(2)}`;
+  document.getElementById("teamCount").textContent = `${S.squadre.length} squadre`;
+  const bp = document.getElementById("btnPrev");
+  bp.disabled = !(S.archivio && S.archivio.length);
+  bp.title = bp.disabled ? "Nessuna stagione precedente archiviata" : "Torna alla stagione precedente";
+  const led = document.getElementById("led"), stx = document.getElementById("syncTx");
+  led.className = "led " + (collegato ? "on" : "off");
+  stx.textContent = collegato
+    ? (sonoAdmin() ? `amministratore · v${versione}` : `${io.nome} · sola lettura`)
+    : "non collegato";
+  const tr = document.getElementById("tabRich");
+  if(tr){ tr.classList.toggle("hidden", !sonoAdmin());
+    tr.textContent = azioni.length ? `Richieste (${azioni.length})` : "Richieste"; }
+  renderRail();
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  const v = document.getElementById("view");
+  v.innerHTML = ({ rosa:viewRosa, scambi:viewScambi, riconferme:viewRiconferme, draft:viewDraft,
+                   classifica:viewClassifica, storico:viewStorico, picks:viewPicks, richieste:viewRichieste,
+                   listone:viewListone, svincolati:viewSvincolati,
+                   controlli:viewControlli, regole:viewRegole })[tab]();
+  bindView();
+}
+
+function renderRail(){
+  document.getElementById("teamList").innerHTML = S.squadre.map((s,i) => {
+    const pb = problemi(s);
+    const bad = pb.some(p => p.lv === "bad");
+    const warn = pb.some(p => p.lv === "warn");
+    const col = bad ? "var(--bad)" : warn ? "var(--warn)" : "transparent";
+    return `<button class="tbtn ${i===sel?"on":""}" data-team="${i}">
+      <div class="nm">${esc(s.nome)}</div>
+      <div class="mt"><span>${s.posizione ? s.posizione+"º" : "—"}</span><span>${s.crediti_residui} cr</span><span>${occupatiVivaio(s)}/${S.regole.slotPrimavera} vivaio</span></div>
+      <span class="dot" style="background:${col}"></span></button>`;
+  }).join("");
+}
+
+function clock(p){
+  const a = anniResidui(p), max = Math.max(durataMax(p), a || 0);
+  if(a === null) return `<span style="color:var(--tx-faint);font-size:12px">—</span>`;
+  let h = "";
+  for(let i=0;i<max;i++){
+    let c = "seg";
+    if(i < a) c += (a === 1 ? " last" : " on");
+    h += `<span class="${c}"></span>`;
+  }
+  if(a <= 0) h = `<span class="seg dead"></span>`.repeat(Math.max(max,1));
+  return `<span class="clock" title="${a<=0?"Scaduto":a+" stagioni residue"}">${h}</span>`;
+}
+
+function rowPlayer(p){
+  const a = anniResidui(p);
+  let flag = "";
+  if(fuoriSerieA(p)) flag = `<span title="Fuori dalla Serie A" style="color:var(--bad)">✕</span>`;
+  else if(a !== null && a <= 0) flag = `<span title="Contratto scaduto" style="color:var(--bad)">▲</span>`;
+  else if(a === 1) flag = `<span title="Ultimo anno di contratto" style="color:var(--warn)">▲</span>`;
+  const fasciaTag = p.reparto === "primavera" && p.fascia
+    ? `<span class="pill" style="background:#2A2036;color:#C89BE8">${p.fascia}</span>` : "";
+  const frTag = p.reparto === "fuori_rosa" ? `<span class="pill" style="background:#20303C;color:#8FC4E0">fuori rosa</span>` : "";
+  return `<div class="row" data-pl="${p.id}">
+    <span class="rl" style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span>
+    <span class="nm"><b>${esc(p.nome)}</b> <span>${esc(p.club||"svincolato")}</span> ${fasciaTag}${frTag}</span>
+    <span class="pz">${p.prezzo != null ? p.prezzo+" cr" : "—"}</span>
+    ${clock(p)}
+    <span class="fl">${flag}</span></div>`;
+}
+
+function blockRows(titolo, players, atteso){
+  const over = atteso != null && players.length > atteso;
+  const vuoti = atteso != null ? Math.max(0, atteso - players.length) : 0;
+  return `<div class="block">
+    <div class="bhead ${over?"over":""}"><span class="t">${titolo}</span>
+      <span class="c">${players.length}${atteso!=null?" / "+atteso:""}</span></div>
+    ${players.map(rowPlayer).join("") || (atteso==null?`<div class="row empty"><span></span><span>Nessun giocatore</span><span></span><span></span><span></span></div>`:"")}
+    ${Array.from({length:vuoti},() => `<div class="row empty"><span></span><span>Slot libero</span><span></span><span></span><span></span></div>`).join("")}
+  </div>`;
+}
+
+function viewRosa(){
+  const sq = team();
+  const occ = occupatiVivaio(sq);
+  const left = RUOLI.map(r => blockRows(RUOLO_NOME[r], reparto(sq,r), S.regole.rosa[r])).join("");
+  const right = legendaFasce(S.annoStagione)
+              + blockRows("Primavera", primavera(sq), null)
+              + blockRows("Fuori rosa", fuoriRosa(sq), null)
+              + `<div class="card"><h3>Aggiungi giocatore</h3>
+                 <div class="hint">Usalo per un acquisto all'asta, una scelta al draft o un arrivo in scambio.</div>
+                 <button class="btn pri" id="btnAdd">Aggiungi alla rosa</button></div>`;
+  return `<div class="thead">
+      <div><h2>${esc(sq.nome)}</h2>
+        <div class="pos">${sq.posizione ? sq.posizione+"º posto la scorsa stagione" : "Posizione non impostata"} · ${nRiconferme(sq)} riconferme disponibili</div></div>
+      <div class="stats">
+        <div class="stat"><div class="v">${sq.crediti_residui}</div><div class="l">Crediti residui</div></div>
+        <div class="stat"><div class="v">${speso(sq)}</div><div class="l">Impegnati in rosa</div></div>
+        <div class="stat"><div class="v" style="color:${occ>S.regole.slotPrimavera?"var(--bad)":"inherit"}">${occ}/${S.regole.slotPrimavera}</div><div class="l">Slot vivaio</div></div>
+      </div></div>
+    <div class="cols"><div>${left}</div><div>${right}</div></div>`;
+}
+
+function viewRiconferme(){
+  const sq = team();
+  const lim = nRiconferme(sq);
+  const rosa = sq.rosa.filter(p => p.reparto === "prima")
+    .sort((a,b) => (b.prezzo||0) - (a.prezzo||0));
+  const scelti = rosa.filter(p => p.riconferma);
+  const costo = scelti.reduce((n,p) => n + costoRiconferma(p), 0);
+  const resta = S.regole.budget - costo;
+  const righe = rosa.map(p => {
+    const ok = riconfermabile(p);
+    const a = anniResidui(p);
+    const motivo = ok ? "" : (fuoriSerieA(p) ? "Fuori dalla Serie A" : (a !== null && a <= 1) ? "Contratto esaurito" : "Non disponibile");
+    const uff = quotazioneUfficiale(p);
+    const q = quotazione(p);
+    const forzata = p.quotazione != null && p.quotazione !== uff;
+    // il costo è il maggiore fra prezzo pagato e quotazione: segnalo quale dei due comanda
+    const base = q != null && q > (p.prezzo || 0) ? "quotazione" : "prezzo d'acquisto";
+    return `<tr>
+      <td>${ok ? `<input type="checkbox" class="rc" data-pl="${p.id}" ${p.riconferma?"checked":""}>` : ""}</td>
+      <td style="color:var(--${p.ruolo})">${p.ruolo}</td>
+      <td>${esc(p.nome)}</td>
+      <td style="color:var(--tx-faint)">${esc(p.club||"—")}</td>
+      <td class="num">${p.prezzo ?? "—"}</td>
+      <td class="num"><input type="number" min="0" class="qt" data-pl="${p.id}" value="${q ?? ""}" placeholder="—"
+          title="${uff != null ? "Quotazione ufficiale: " + uff : "Non trovato nel listone"}"
+          style="width:64px${forzata ? ";border-color:var(--warn)" : ""}"></td>
+      <td class="num"><b>${ok ? costoRiconferma(p) : "—"}</b>${ok && q != null ? `<div class="owner">${base}</div>` : ""}</td>
+      <td style="color:var(--tx-faint);font-size:12.5px">${motivo}</td></tr>`;
+  }).join("");
+  const senzaQ = rosa.filter(p => quotazioneUfficiale(p) == null).length;
+  const forzate = rosa.filter(p => p.quotazione != null && p.quotazione !== quotazioneUfficiale(p)).length;
+  const avviso = !S.listone.length
+    ? `<div class="card" style="border-color:var(--warn)"><h3>Quotazioni non ancora caricate</h3>
+       <div class="hint" style="margin:0">Senza listone il costo coincide col prezzo d'acquisto. Importa le quotazioni ufficiali dalla scheda Listone e questa colonna si compila da sola.</div></div>`
+    : senzaQ
+    ? `<div class="card" style="border-color:var(--warn)"><h3>${senzaQ} giocatori senza quotazione</h3>
+       <div class="hint" style="margin:0">Non li trovo nel listone, di solito perché hanno lasciato la Serie A o perché il nome è scritto in modo diverso. Per quelli puoi digitare la quotazione a mano nella colonna.</div></div>`
+    : "";
+  return `<div class="thead"><div><h2>Riconferme</h2>
+      <div class="pos">${esc(sq.nome)} · si riconferma al prezzo d'acquisto, o alla quotazione se più alta</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v" style="color:${scelti.length>lim?"var(--bad)":"inherit"}">${scelti.length}/${lim}</div><div class="l">Riconferme scelte</div></div>
+      <div class="stat"><div class="v">${costo}</div><div class="l">Costo totale</div></div>
+      <div class="stat"><div class="v" style="color:${resta<0?"var(--bad)":"var(--good)"}">${resta}</div><div class="l">Resta per l'asta</div></div>
+    </div></div>
+    ${avviso}
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Club</th>
+        <th class="num">Acquisto</th><th class="num">Quotazione</th><th class="num">Costo</th><th>Note</th></tr></thead>
+      <tbody>${righe}</tbody></table></div>
+    <div class="btnrow"><button class="btn" id="btnClearRc">Azzera selezione</button>
+      ${forzate ? `<button class="btn" id="btnResetQt">Ripristina ${forzate} quotazioni dal listone</button>` : ""}</div>`;
+}
+
+function viewDraft(){
+  const ordinate = [...S.squadre].filter(s => s.posizione).sort((a,b) => a.posizione - b.posizione);
+  const mancanti = S.squadre.length - ordinate.length;
+  const pesi = S.regole.lottery;
+  const righe = S.squadre.map((s,i) => {
+    const slotLiberi = Math.max(0, S.regole.slotPrimavera - occupatiVivaio(s));
+    const peso = s.posizione && pesi[s.posizione] != null ? pesi[s.posizione] + "%" : (s.posizione ? "scelta fissa" : "—");
+    return `<tr><td>${esc(s.nome)}</td>
+      <td><select class="pos" data-team="${i}">
+        <option value="">—</option>
+        ${S.squadre.map((_,n) => `<option value="${n+1}" ${s.posizione===n+1?"selected":""}>${n+1}º</option>`).join("")}
+      </select></td>
+      <td class="num">${nRiconferme(s)}</td>
+      <td class="num">${slotLiberi}</td>
+      <td class="num">${peso}</td></tr>`;
+  }).join("");
+  return `<div class="thead"><div><h2>Draft primavera</h2>
+      <div class="pos">Le prime tre classificate prendono le ultime tre scelte. Dalla quarta alla decima si estrae a sorte, con più probabilità a chi ha chiuso peggio.</div></div></div>
+    ${legendaFasce(annoDraft(), "chi scegli al draft deve rientrare in una di queste fasce")}
+    ${mancanti ? `<div class="card" style="border-color:var(--warn)"><h3>Classifica incompleta</h3>
+      <div class="hint" style="margin:0">Mancano ${mancanti} posizioni. Assegnale dalla scheda Classifica per poter estrarre l'ordine.</div></div>` : ""}
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th>Squadra</th><th style="width:96px">Posizione</th><th class="num">Riconferme</th><th class="num">Slot liberi</th><th class="num">Prob. 1ª scelta</th></tr></thead>
+      <tbody>${righe}</tbody></table></div>
+    <div class="btnrow"><button class="btn pri" id="btnLottery" ${mancanti?"disabled style='opacity:.45'":""}>${S.ultimoDraft?"Riestrai l'ordine":"Estrai ordine del draft"}</button></div>
+    ${lavagnaDraft()}`;
+}
+
+// la lavagna applica gli scambi: in ogni casella sceglie chi possiede quella pick,
+// non chi l'ha generata con la propria posizione in classifica
+function lavagnaDraft(){
+  const d = S.ultimoDraft;
+  if(!d) return "";
+  const anno = d.anno ?? annoDraft();
+  const giri = S.regole.giriPick;
+  const blocchi = [];
+  for(let g = 1; g <= giri; g++){
+    const celle = d.ordine.map((oid, i) => {
+      const pk = pickDi(anno, g, oid);
+      if(!pk) return "";
+      const propr = S.squadre.find(s => s.id === pk.possessore);
+      const scambiata = pk.possessore !== pk.origine;
+      const liberi = propr ? Math.max(0, S.regole.slotPrimavera - occupatiVivaio(propr)) : 0;
+      const azione = pk.assegnato
+        ? `<span style="color:var(--good)">${esc(pk.assegnato)}</span>`
+        : liberi <= 0
+          ? `<span class="via">vivaio pieno</span>`
+          : (sonoAdmin() || pk.possessore === io?.squadra_id)
+            ? `<button data-pick="${pk.id}">Scegli</button>`
+            : `<span class="via">in attesa</span>`;
+      return `<div class="pcell ${pk.assegnato?"presa":""}">
+        <span class="n">${g}.${i+1}</span>
+        <span>${esc(propr ? propr.nome : "?")}${scambiata?`<div class="via">via ${esc(nomeSquadra(pk.origine))}</div>`:""}</span>
+        <span class="via">${pk.assegnato ? "" : liberi + " slot liberi"}</span>
+        <span>${azione}</span></div>`;
+    }).join("");
+    const fatte = d.ordine.filter(oid => pickDi(anno,g,oid)?.assegnato).length;
+    blocchi.push(`<div class="giro"><header><span>${g}º giro</span><span>${fatte}/${d.ordine.length}</span></header>${celle}</div>`);
+  }
+  return `<div class="card" style="margin-top:16px"><h3>Ordine estratto · draft ${anno}</h3>
+      <div class="hint">Estrazione del ${esc(d.quando)}. L'ordine si ripete a ogni giro, ma in ogni casella compare chi possiede quella pick dopo gli scambi.</div>
+    </div>${blocchi.join("")}`;
+}
+
+/* ================= PICKS ================= */
+function viewPicks(){
+  const anni = [...new Set(S.picks.map(p => p.anno))].sort();
+  const carte = S.squadre.map(s => {
+    const mie = picksDi(s.id);
+    const cedute = S.picks.filter(p => p.origine === s.id && p.possessore !== s.id);
+    const blocchi = anni.map(a => {
+      const lista = mie.filter(p => p.anno === a);
+      if(!lista.length) return "";
+      return `<div class="anno"><div class="y">${a}</div><div class="cs">${lista.map(p =>
+        `<span class="pkc ${p.possessore!==p.origine?"acq":""} ${p.assegnato?"usata":""}"
+          title="${p.assegnato ? "già usata su " + esc(p.assegnato) : (p.possessore!==p.origine ? "acquisita da " + esc(nomeSquadra(p.origine)) : "pick propria")}"
+          >${esc(etichettaPick(p))}</span>`).join("")}</div></div>`;
+    }).join("");
+    return `<div class="pkcard"><header>${esc(s.nome)}</header>
+      ${blocchi || `<div class="anno"><span class="via">Nessuna pick</span></div>`}
+      ${cedute.length ? `<div class="anno"><div class="y">cedute</div><div class="cs">${cedute.map(p =>
+        `<span class="pkc" style="opacity:.5">${p.giro}º ${p.anno} → ${esc(nomeSquadra(p.possessore))}</span>`).join("")}</div></div>` : ""}
+    </div>`;
+  }).join("");
+  const acquisite = S.picks.filter(p => p.possessore !== p.origine).length;
+  return `<div class="thead"><div><h2>Picks</h2>
+      <div class="pos">Le picks in verde sono arrivate da uno scambio e riportano la squadra che le ha cedute.</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${S.picks.length}</div><div class="l">In circolazione</div></div>
+      <div class="stat"><div class="v">${acquisite}</div><div class="l">Cambiate di mano</div></div>
+    </div></div>
+    <div class="pkgrid">${carte}</div>`;
+}
+
+// scelta di un giovane direttamente dalla lavagna del draft
+function apriScelta(pickId){
+  const pk = S.picks.find(p => p.id === pickId);
+  if(!pk) return;
+  const sq = S.squadre.find(s => s.id === pk.possessore);
+  const anno = pk.anno;
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
+    <div class="mhead"><h3>Scelta ${pk.giro}º giro · ${anno}</h3>
+      <div class="s">${esc(sq.nome)}${pk.possessore!==pk.origine?` · pick arrivata da ${esc(nomeSquadra(pk.origine))}`:""}</div></div>
+    <div class="mbody">
+      ${legendaFasce(anno)}
+      <div class="grid g2">
+        <div class="f" style="grid-column:1/-1"><label>Nome del giocatore</label><input id="dNome" placeholder="anche fuori listone"></div>
+        <div class="f"><label>Ruolo</label><select id="dRuolo">${RUOLI.map(r => `<option value="${r}">${RUOLO_NOME[r]}</option>`).join("")}</select></div>
+        <div class="f"><label>Club</label><input id="dClub"></div>
+        <div class="f"><label>Anno di nascita</label><input type="number" id="dNato" min="${anno-25}" max="${anno-15}" placeholder="es. ${anno-20}"></div>
+        <div class="f"><label>Fascia</label><select id="dFascia">${FASCE.map(f => `<option>${f}</option>`).join("")}</select></div>
+      </div>
+      <div class="hint" id="dInfo" style="margin:12px 0 0"></div>
+    </div>
+    <div class="mfoot"><button class="btn" id="dNo">Annulla</button>
+      <button class="btn pri" id="dSi">Aggiungi al vivaio</button></div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  const $ = id => document.getElementById(id);
+  const aggiorna = () => {
+    const nato = $("dNato").value ? +$("dNato").value : null;
+    if(nato){ const f = fasciaEsatta({ nato }, anno); if(f) $("dFascia").value = f; }
+    const f = $("dFascia").value;
+    const dur = S.regole.durataPrimavera[f] ?? 3;
+    $("dInfo").innerHTML = `Fascia <b>${f}</b>: contratto di ${dur} ${dur===1?"stagione":"stagioni"}, scadenza 1/09/${anno+dur}.`;
+  };
+  $("dNato").oninput = aggiorna; $("dFascia").onchange = aggiorna; aggiorna();
+  $("dNo").onclick = close;
+  $("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  $("dSi").onclick = async () => {
+    const nome = $("dNome").value.trim();
+    if(!nome){ toast("Serve il nome del giocatore"); return; }
+    const f = $("dFascia").value;
+    const dur = S.regole.durataPrimavera[f] ?? 3;
+    if(!sonoAdmin()){
+      if(pk.possessore !== io.squadra_id){ toast("Questa pick non è tua"); return; }
+      const ok = await inviaAzione("draft", { pickId: pk.id, nome, ruolo:$("dRuolo").value,
+        club:$("dClub").value.trim(), nato: $("dNato").value ? +$("dNato").value : null, fascia:f });
+      if(ok){ close(); toast("Scelta inviata all'amministratore"); }
+      return;
+    }
+    sq.rosa.push({ id:uid(), nome, ruolo:$("dRuolo").value, club:$("dClub").value.trim(),
+      prezzo:0, nato: $("dNato").value ? +$("dNato").value : null,
+      scadenza:`${anno+dur}-09-01`, reparto:"primavera", fascia:f });
+    pk.assegnato = nome;
+    save(); close(); render();
+    toast(`${nome} al vivaio di ${sq.nome}, contratto fino al 2029`.replace("2029", String(anno+dur)));
+  };
+}
+
+/* ================= LISTONE ================= */
+let lq = "", lruolo = "", lclub = "", lstato = "";
+
+function barraListone(mostraStato){
+  const clubs = [...new Set(S.listone.map(l => l.club))].sort();
+  return `<div class="toolbar">
+    <input type="search" id="lq" placeholder="Cerca un giocatore" value="${esc(lq)}">
+    <select id="lruolo"><option value="">Tutti i ruoli</option>
+      ${RUOLI.map(r => `<option value="${r}" ${lruolo===r?"selected":""}>${RUOLO_NOME[r]}</option>`).join("")}</select>
+    <select id="lclub"><option value="">Tutti i club</option>
+      ${clubs.map(c => `<option ${lclub===c?"selected":""}>${esc(c)}</option>`).join("")}</select>
+    ${mostraStato ? `<select id="lstato"><option value="">Tesserati e liberi</option>
+      <option value="liberi" ${lstato==="liberi"?"selected":""}>Solo svincolati</option>
+      <option value="presi" ${lstato==="presi"?"selected":""}>Solo tesserati</option></select>` : ""}
+  </div>`;
+}
+
+function filtra(lista, conStato){
+  return lista.filter(l => {
+    if(lruolo && l.ruolo !== lruolo) return false;
+    if(lclub && l.club !== lclub) return false;
+    if(lq && !norm(l.nome).includes(norm(lq))) return false;
+    if(conStato && lstato){
+      const preso = !!proprietario(l.nome);
+      if(lstato === "liberi" && preso) return false;
+      if(lstato === "presi" && !preso) return false;
+    }
+    return true;
+  });
+}
+
+function tabellaListone(righe, conProprietario){
+  if(!righe.length) return `<div class="card"><div class="ok-empty">Nessun giocatore corrisponde ai filtri.</div></div>`;
+  const max = 400, mostrati = righe.slice(0, max);
+  return `<div class="card" style="padding:0;overflow:hidden">
+    <table><thead><tr><th style="width:24px"></th><th>Giocatore</th><th>Club</th>
+      <th class="num">Quotazione</th><th class="num">Iniziale</th><th class="num">FVM</th>
+      ${conProprietario ? "<th>Situazione</th>" : "<th>Prezzo di riferimento</th>"}</tr></thead>
+    <tbody>${mostrati.map(l => {
+      const own = conProprietario ? proprietario(l.nome) : null;
+      const ultima = conProprietario
+        ? (own ? `<span class="owner">${esc(own.s.nome)}</span>` : `<span class="free">svincolato</span>`)
+        : `<b>${l.qa ?? "—"}</b> <span class="owner">minimo d'asta</span>`;
+      return `<tr><td style="color:var(--${l.ruolo})">${l.ruolo}</td>
+        <td>${esc(l.nome)}</td><td style="color:var(--tx-faint)">${esc(l.club)}</td>
+        <td class="num">${l.qa ?? "—"}</td><td class="num" style="color:var(--tx-faint)">${l.qi ?? "—"}</td>
+        <td class="num" style="color:var(--tx-faint)">${l.fvm ?? "—"}</td><td>${ultima}</td></tr>`;
+    }).join("")}</tbody></table>
+    ${righe.length > max ? `<div class="ok-empty">Mostrati i primi ${max} di ${righe.length}. Restringi la ricerca per vedere gli altri.</div>` : ""}
+  </div>`;
+}
+
+function zonaImport(){
+  return `<div class="card"><h3>Carica le quotazioni ufficiali</h3>
+    <div class="hint">Su fantacalcio.it, nella pagina Quotazioni e FVM, il pulsante "Scarica" produce un file Excel. Trascinalo qui, oppure premi il pulsante per sceglierlo. Ruoli, club e quotazioni vengono letti da lì, così restano sempre allineati alla fonte.</div>
+    <div class="dropzone" id="drop">Trascina qui il file, oppure
+      <button class="btn" id="btnPickFile" style="margin-left:6px">scegli il file</button></div>
+    <input type="file" id="listFile" accept=".xlsx,.xls,.csv" class="hidden">
+    <div class="hint" style="margin:12px 0 0">Ho verificato la pagina il 4 settembre 2026: il listone pubblicato è quello 2026/27, con Frosinone, Monza e Venezia al posto di Cremonese, Empoli e Pisa. Se importi quello mentre le tue rose sono ancora ferme a gennaio 2026, diversi giocatori risulteranno svincolati solo perché hanno cambiato squadra.</div></div>`;
+}
+
+function viewListone(){
+  if(!S.listone.length) return `<div class="thead"><div><h2>Listone</h2>
+    <div class="pos">L'elenco ufficiale dei calciatori quotati, con ruolo e quotazione.</div></div></div>${zonaImport()}`;
+  const righe = filtra(S.listone, true);
+  const liberi = svincolati().length;
+  return `<div class="thead"><div><h2>Listone</h2>
+      <div class="pos">${esc(S.listoneInfo || "Quotazioni importate")}</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${S.listone.length}</div><div class="l">Quotati</div></div>
+      <div class="stat"><div class="v">${S.listone.length - liberi}</div><div class="l">Tesserati</div></div>
+      <div class="stat"><div class="v">${liberi}</div><div class="l">Svincolati</div></div>
+    </div></div>
+    ${barraListone(true)}${tabellaListone(righe, true)}
+    <div class="btnrow"><button class="btn" id="btnRicarica">Sostituisci il listone</button></div>`;
+}
+
+function viewSvincolati(){
+  if(!S.listone.length) return `<div class="thead"><div><h2>Svincolati</h2>
+    <div class="pos">Chi è nel listone ma non compare in nessuna rosa.</div></div></div>${zonaImport()}`;
+  const liberi = filtra(svincolati(), false);
+  const perRuolo = RUOLI.map(r => `${RUOLO_NOME[r]} ${svincolati().filter(l => l.ruolo === r).length}`).join(" · ");
+  return `<div class="thead"><div><h2>Svincolati</h2>
+      <div class="pos">${perRuolo}</div></div>
+    <div class="stats"><div class="stat"><div class="v">${svincolati().length}</div><div class="l">Disponibili all'asta</div></div></div></div>
+    ${barraListone(false)}${tabellaListone(liberi, false)}`;
+}
+
+/* ================= SCAMBI ================= */
+let trade = { a:0, b:1, pa:new Set(), pb:new Set(), ka:new Set(), kb:new Set(), ca:0, cb:0 };
+
+function latoScambio(lettera){
+  const idx = trade[lettera];            // "a" oppure "b"
+  const sq = S.squadre[idx];
+  const selP = trade["p"+lettera], selK = trade["k"+lettera];
+  const crediti = trade["c"+lettera];
+  const righe = sq.rosa.map(p => {
+    const on = selP.has(p.id);
+    const tag = p.reparto === "prima" ? "" : (p.reparto === "primavera" ? " · primavera" : " · fuori rosa");
+    return `<div class="selrow ${on?"on":""}" data-side="${lettera}" data-pl="${p.id}">
+      <span>${on ? "✓" : ""}</span><span style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span>
+      <span>${esc(p.nome)}<span class="owner">${tag}</span></span>
+      <span class="num" style="color:var(--tx-dim)">${p.prezzo ?? "—"}</span></div>`;
+  }).join("");
+  const picks = picksDi(sq.id).map(pk =>
+    `<button class="chip ${selK.has(pk.id)?"on":""}" data-side="${lettera}" data-pk="${pk.id}">${esc(etichettaPick(pk))}</button>`
+  ).join("") || `<span class="owner">Nessuna pick disponibile</span>`;
+  return `<div class="side">
+    <header>
+      <select class="tradeteam" data-side="${lettera}">
+        ${S.squadre.map((s,i) => `<option value="${i}" ${i===idx?"selected":""}>${esc(s.nome)}</option>`).join("")}
+      </select>
+      <div class="meta"><span>${sq.crediti_residui} crediti</span><span>${selP.size} giocatori scelti</span><span>${selK.size} picks</span></div>
+    </header>
+    <div class="pickrow"><span class="owner" style="width:100%;margin-bottom:3px">Picks del draft</span>${picks}</div>
+    <div class="pickrow"><label class="owner" style="width:100%;margin-bottom:3px">Crediti da cedere</label>
+      <input type="number" min="0" max="${sq.crediti_residui}" class="tradecr" data-side="${lettera}" value="${crediti}" style="width:96px"></div>
+    <div class="pk">${righe}</div></div>`;
+}
+
+// controlla il pareggio dei ruoli e la sostenibilità dell'operazione
+function verificaScambio(){
+  const A = S.squadre[trade.a], B = S.squadre[trade.b];
+  const gA = A.rosa.filter(p => trade.pa.has(p.id));
+  const gB = B.rosa.filter(p => trade.pb.has(p.id));
+  const err = [];
+  if(trade.a === trade.b) err.push("Le due squadre coincidono: scegline due diverse.");
+  if(!gA.length && !gB.length && !trade.ka.size && !trade.kb.size && !trade.ca && !trade.cb)
+    err.push("Lo scambio è vuoto: seleziona almeno un giocatore, una pick o dei crediti.");
+  if(trade.ca > A.crediti_residui) err.push(`${A.nome} non ha ${trade.ca} crediti disponibili.`);
+  if(trade.cb > B.crediti_residui) err.push(`${B.nome} non ha ${trade.cb} crediti disponibili.`);
+
+  const saldi = {};
+  if(S.regole.pareggioRuoli){
+    RUOLI.forEach(r => {
+      const out = gA.filter(p => p.reparto === "prima" && p.ruolo === r).length;
+      const inn = gB.filter(p => p.reparto === "prima" && p.ruolo === r).length;
+      saldi[r] = inn - out;
+      if(inn !== out) err.push(`${RUOLO_NOME[r]}: ${A.nome} cede ${out} e riceve ${inn}. Il reparto deve restare in pari.`);
+    });
+  }
+  // capienza del vivaio dopo lo scambio
+  const vivA = occupatiVivaio(A) - gA.filter(p => p.reparto !== "prima").length + gB.filter(p => p.reparto !== "prima").length;
+  const vivB = occupatiVivaio(B) - gB.filter(p => p.reparto !== "prima").length + gA.filter(p => p.reparto !== "prima").length;
+  if(vivA > S.regole.slotPrimavera) err.push(`${A.nome} arriverebbe a ${vivA} nel vivaio, oltre il limite di ${S.regole.slotPrimavera}.`);
+  if(vivB > S.regole.slotPrimavera) err.push(`${B.nome} arriverebbe a ${vivB} nel vivaio, oltre il limite di ${S.regole.slotPrimavera}.`);
+  return { err, gA, gB, saldi, vivA, vivB };
+}
+
+function viewScambi(){
+  const v = verificaScambio();
+  const A = S.squadre[trade.a], B = S.squadre[trade.b];
+  const valA = v.gA.reduce((n,p) => n + (p.prezzo||0), 0) + trade.ca;
+  const valB = v.gB.reduce((n,p) => n + (p.prezzo||0), 0) + trade.cb;
+  const storico = (S.scambi||[]).slice().reverse().slice(0,8);
+  return `<div class="thead"><div><h2>Scambi</h2>
+    <div class="pos">I contratti viaggiano col giocatore e restano invariati. Il pareggio dei ruoli vale sulla prima squadra.</div></div></div>
+    <div class="trade">${latoScambio("a")}<div class="tradearrow">⇄</div>${latoScambio("b")}</div>
+    <div class="balance">
+      <div class="bal">
+        <span>${esc(A.nome)} cede <b>${valA}</b> di valore</span>
+        <span>${esc(B.nome)} cede <b>${valB}</b> di valore</span>
+        <span>Vivaio dopo lo scambio: <b>${v.vivA}</b> e <b>${v.vivB}</b></span>
+      </div>
+      ${v.err.length
+        ? v.err.map(e => `<div class="err">${esc(e)}</div>`).join("")
+        : `<div class="okmsg">Lo scambio rispetta il regolamento.</div>`}
+      <div class="btnrow">
+        <button class="btn pri" id="btnTrade" ${v.err.length?"disabled style='opacity:.45'":""}>${sonoAdmin()?"Esegui lo scambio":"Proponi lo scambio"}</button>
+        <button class="btn" id="btnTradeClear">Svuota</button>
+      </div></div>
+    ${storico.length ? `<div class="card" style="margin-top:16px"><h3>Ultimi scambi</h3>
+      <div class="hint">Registro delle operazioni già eseguite.</div>
+      ${storico.map(t => `<div class="alert"><span class="ic" style="color:var(--info)">⇄</span>
+        <span class="tx"><b>${esc(t.a)} ⇄ ${esc(t.b)}</b><div>${esc(t.testo)} · ${esc(t.quando)}</div></span></div>`).join("")}</div>` : ""}`;
+}
+
+function eseguiScambio(){
+  const v = verificaScambio();
+  if(v.err.length) return;
+  const A = S.squadre[trade.a], B = S.squadre[trade.b];
+  // i giocatori cambiano squadra col contratto intatto
+  A.rosa = A.rosa.filter(p => !trade.pa.has(p.id));
+  B.rosa = B.rosa.filter(p => !trade.pb.has(p.id));
+  v.gA.forEach(p => { p.riconferma = false; B.rosa.push(p); });
+  v.gB.forEach(p => { p.riconferma = false; A.rosa.push(p); });
+  S.picks.forEach(pk => {
+    if(trade.ka.has(pk.id)) pk.possessore = B.id;
+    if(trade.kb.has(pk.id)) pk.possessore = A.id;
+  });
+  A.crediti_residui += trade.cb - trade.ca;
+  B.crediti_residui += trade.ca - trade.cb;
+
+  const parte = (g,k,c) => [
+    g.map(p => p.nome).join(", "),
+    k ? `${k} pick` : "",
+    c ? `${c} crediti` : ""
+  ].filter(Boolean).join(" + ") || "nulla";
+  S.scambi = S.scambi || [];
+  S.scambi.push({ a:A.nome, b:B.nome,
+    testo: `${A.nome} cede ${parte(v.gA, trade.ka.size, trade.ca)}; ${B.nome} cede ${parte(v.gB, trade.kb.size, trade.cb)}`,
+    anno: S.annoStagione,
+    quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) });
+  trade.pa.clear(); trade.pb.clear(); trade.ka.clear(); trade.kb.clear(); trade.ca = 0; trade.cb = 0;
+  save(); render(); toast("Scambio eseguito");
+}
+
+/* ---- importazione del file quotazioni ---- */
+function leggiListone(file){
+  const rd = new FileReader();
+  rd.onload = e => {
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type:"array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const grid = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+      // il file ufficiale ha una riga di titolo prima delle intestazioni: la cerco
+      let hi = grid.findIndex(r => r && r.some(c => /^nome$/i.test(String(c||"").trim()))
+                                   && r.some(c => /^squadra$/i.test(String(c||"").trim())));
+      if(hi < 0) throw new Error("Non trovo le colonne Nome e Squadra");
+      const head = grid[hi].map(c => String(c||"").trim().toLowerCase());
+      const col = n => head.findIndex(h => n.test(h));
+      const iN = col(/^nome$/), iS = col(/^squadra$/), iR = col(/^r$/),
+            iQA = col(/^qt\.?a$/), iQI = col(/^qt\.?i$/), iF = col(/^fvm$/);
+      const mapR = { p:"P", d:"D", c:"C", a:"A" };
+      const out = [];
+      for(let i = hi+1; i < grid.length; i++){
+        const r = grid[i]; if(!r || !r[iN]) continue;
+        const ruolo = mapR[String(r[iR]||"").trim().toLowerCase()];
+        if(!ruolo) continue;
+        out.push({ nome:String(r[iN]).trim(), club:String(r[iS]||"").trim(), ruolo,
+                   qa: num(r[iQA]), qi: num(r[iQI]), fvm: num(r[iF]) });
+      }
+      if(!out.length) throw new Error("Nessun calciatore riconosciuto");
+      S.listone = out;
+      const titolo = String((grid[0]||[]).filter(Boolean)[0] || "").trim();
+      S.listoneInfo = `${out.length} calciatori${titolo ? " · " + titolo : ""} · importato il ${new Date().toLocaleDateString("it-IT")}`;
+      save(); render(); toast(`Listone importato: ${out.length} calciatori`);
+      setTimeout(proponiAllineamento, 400);
+    }catch(err){
+      toast("Il file non ha il formato delle quotazioni ufficiali: " + err.message);
+    }
+  };
+  rd.readAsArrayBuffer(file);
+}
+function num(v){ const n = parseFloat(String(v).replace(",",".")); return isNaN(n) ? null : n; }
+
+/* ================= STAGIONI ================= */
+// con l'anno di nascita la fascia è esatta; senza, si scala di uno a ogni stagione
+function fasciaEsatta(p, anno){
+  if(!p.nato) return null;
+  const e = anno - p.nato;
+  if(e >= 23) return "U23";
+  if(e === 22) return "U22";
+  if(e === 21) return "U21";
+  return "U20";
+}
+function fasciaAvanzata(p, nuovoAnno){
+  const esatta = fasciaEsatta(p, nuovoAnno);
+  if(esatta) return esatta;
+  return ({ U20:"U21", U21:"U22", U22:"U23", U23:"U23" })[p.fascia] || p.fascia;
+}
+
+function archivia(){
+  S.archivio = S.archivio || [];
+  const copia = JSON.parse(JSON.stringify({
+    annoStagione: S.annoStagione, squadre: S.squadre, picks: S.picks, scambi: S.scambi
+  }));
+  S.archivio.push(copia);
+}
+
+function avanzaStagione(){
+  archivia();
+  const nuovo = S.annoStagione + 1;
+  const report = { scaduti:[], oltreFascia:[], promossi:0 };
+  S.squadre.forEach(sq => {
+    // i contratti giunti a termine liberano il giocatore
+    const finiti = sq.rosa.filter(p => { const a = +String(p.scadenza||"").slice(0,4) - nuovo; return p.scadenza && a <= 0; });
+    finiti.forEach(p => report.scaduti.push(`${p.nome} (${sq.nome})`));
+    sq.rosa = sq.rosa.filter(p => !finiti.includes(p));
+    // le fasce del vivaio salgono di un anno
+    sq.rosa.forEach(p => {
+      if(p.reparto === "primavera"){
+        const prima = p.fascia;
+        p.fascia = fasciaAvanzata(p, nuovo);
+        if(prima === "U23" && p.fascia === "U23") report.oltreFascia.push(`${p.nome} (${sq.nome})`);
+      }
+      p.riconferma = false;
+    });
+    sq.crediti_residui = S.regole.budget;   // la dotazione si azzera e riparte
+  });
+  S.annoStagione = nuovo;
+  // una nuova annata di picks entra in circolazione
+  const ultimo = nuovo + S.regole.stagioniPick;
+  S.squadre.forEach(s => {
+    for(let g = 1; g <= S.regole.giriPick; g++)
+      S.picks.push({ id:uid(), anno:ultimo, giro:g, origine:s.id, possessore:s.id });
+  });
+  S.picks = S.picks.filter(p => p.anno > nuovo - 1);
+  save(); render();
+  const pezzi = [`Stagione ${nuovo}/${String(nuovo+1).slice(2)}`];
+  if(report.scaduti.length) pezzi.push(`${report.scaduti.length} contratti conclusi`);
+  pezzi.push(`crediti riportati a ${S.regole.budget}`);
+  toast(pezzi.join(" · "));
+  if(report.scaduti.length) mostraReport(nuovo, report);
+}
+
+function mostraReport(anno, r){
+  const lista = a => a.length
+    ? a.map(x => `<div class="alert"><span class="ic" style="color:var(--warn)">▲</span><span class="tx"><b>${esc(x)}</b></span></div>`).join("")
+    : `<div class="ok-empty">Nessuno.</div>`;
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
+    <div class="mhead"><h3>Passaggio alla stagione ${anno}/${String(anno+1).slice(2)}</h3>
+      <div class="s">Ecco cosa è cambiato nelle rose.</div></div>
+    <div class="mbody">
+      <h3 style="font-size:15px;margin-bottom:6px">Contratti conclusi, giocatori liberati</h3>${lista(r.scaduti)}
+      ${r.oltreFascia.length ? `<h3 style="font-size:15px;margin:14px 0 6px">Fuori fascia nel vivaio</h3>${lista(r.oltreFascia)}` : ""}
+    </div>
+    <div class="mfoot"><button class="btn pri" id="mChiudi">Ho capito</button></div></div></div>`;
+  document.getElementById("mChiudi").onclick = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") document.getElementById("modalHost").innerHTML = ""; };
+}
+
+function tornaIndietro(){
+  if(!S.archivio || !S.archivio.length) return;
+  const snap = S.archivio.pop();
+  S.annoStagione = snap.annoStagione;
+  S.squadre = snap.squadre;
+  S.picks = snap.picks;
+  S.scambi = snap.scambi;
+  sel = Math.min(sel, S.squadre.length - 1);
+  save(); render();
+  toast(`Tornato alla stagione ${S.annoStagione}/${String(S.annoStagione+1).slice(2)}`);
+}
+
+/* ---- allineamento delle rose al listone importato ---- */
+function confrontaConListone(){
+  const cambi = [], usciti = [];
+  S.squadre.forEach(sq => sq.rosa.forEach(p => {
+    const l = S.listone.find(x => stessoGiocatore(x.nome, p.nome));
+    if(!l){ if(p.club) usciti.push({ p, sq }); }
+    else if(norm(l.club) !== norm(p.club || "")) cambi.push({ p, sq, da:p.club || "—", a:l.club });
+  }));
+  return { cambi, usciti };
+}
+
+function applicaListone(d){
+  d.cambi.forEach(c => c.p.club = c.a);
+  d.usciti.forEach(u => u.p.club = "");   // vuoto significa fuori dalla Serie A
+  save(); render();
+  toast(`${d.cambi.length} club aggiornati, ${d.usciti.length} fuori dalla Serie A`);
+}
+
+function proponiAllineamento(){
+  const d = confrontaConListone();
+  if(!d.cambi.length && !d.usciti.length){ toast("Le rose sono già allineate al listone"); return; }
+  const riga = (t, s) => `<div class="alert"><span class="ic" style="color:var(--${s})">•</span><span class="tx">${t}</span></div>`;
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
+    <div class="mhead"><h3>Allinea le rose al listone</h3>
+      <div class="s">Confronto fra i club del listone appena importato e quelli registrati nelle rose.</div></div>
+    <div class="mbody">
+      <h3 style="font-size:15px;margin-bottom:6px">Cambi di squadra · ${d.cambi.length}</h3>
+      ${d.cambi.length ? d.cambi.slice(0,60).map(c =>
+          riga(`<b>${esc(c.p.nome)}</b><div>${esc(c.sq.nome)} · ${esc(c.da)} → ${esc(c.a)}</div>`,"info")).join("")
+        : `<div class="ok-empty">Nessuno.</div>`}
+      ${d.cambi.length > 60 ? `<div class="ok-empty">e altri ${d.cambi.length - 60}.</div>` : ""}
+      <h3 style="font-size:15px;margin:15px 0 6px">Non più in Serie A · ${d.usciti.length}</h3>
+      <div class="hint" style="margin-bottom:8px">Il regolamento libera subito lo slot, quindi vanno svincolati a mano dalla scheda del giocatore.</div>
+      ${d.usciti.length ? d.usciti.slice(0,60).map(u =>
+          riga(`<b>${esc(u.p.nome)}</b><div>${esc(u.sq.nome)} · ${esc(u.p.club)}</div>`,"bad")).join("")
+        : `<div class="ok-empty">Nessuno.</div>`}
+      ${d.usciti.length > 60 ? `<div class="ok-empty">e altri ${d.usciti.length - 60}.</div>` : ""}
+    </div>
+    <div class="mfoot"><button class="btn" id="mNo">Lascia com'è</button>
+      <button class="btn pri" id="mSi">Applica ${d.cambi.length + d.usciti.length} modifiche</button></div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("mNo").onclick = close;
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  document.getElementById("mSi").onclick = () => { close(); applicaListone(d); };
+}
+
+/* ================= CLASSIFICA ================= */
+function viewClassifica(){
+  const ordinate = [...S.squadre].sort((a,b) =>
+    (a.posizione || 99) - (b.posizione || 99) || (b.punti || 0) - (a.punti || 0));
+  const assegnate = S.squadre.filter(s => s.posizione).length;
+  const righe = ordinate.map(s => {
+    const i = S.squadre.indexOf(s);
+    const pos = s.posizione;
+    return `<tr class="${i===sel?"me":""}">
+      <td class="rank ${pos && pos<=3 ? "medal":""}">${pos || "—"}</td>
+      <td>${esc(s.nome)}</td>
+      <td><select class="pos" data-team="${i}"><option value="">—</option>
+        ${S.squadre.map((_,n) => `<option value="${n+1}" ${pos===n+1?"selected":""}>${n+1}º</option>`).join("")}</select></td>
+      <td><input type="number" class="punti" data-team="${i}" value="${s.punti ?? ""}" placeholder="—" style="width:74px"></td>
+      <td class="num">${nRiconferme(s)}</td>
+      <td class="num">${pos ? (pos <= 3 ? "scelta fissa" : (S.regole.lottery[pos] ?? 0) + "%") : "—"}</td></tr>`;
+  }).join("");
+  return `<div class="thead"><div><h2>Classifica</h2>
+      <div class="pos">La posizione finale determina quante riconferme hai e dove peschi al draft.</div></div>
+    <div class="stats"><div class="stat"><div class="v">${assegnate}/${S.squadre.length}</div><div class="l">Posizioni assegnate</div></div></div></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th style="width:38px">Pos</th><th>Squadra</th><th style="width:92px">Assegna</th>
+        <th style="width:88px">Punti</th><th class="num">Riconferme</th><th class="num">Prob. 1ª scelta</th></tr></thead>
+      <tbody>${righe}</tbody></table></div>
+    <div class="btnrow">
+      <button class="btn" id="btnDaPunti">Ordina in base ai punti</button>
+      <button class="btn" id="btnAzzeraCl">Azzera la classifica</button></div>`;
+}
+
+/* ================= STORICO ================= */
+let stFiltro = "";
+function viewStorico(){
+  const tutti = (S.scambi || []).slice().reverse();
+  const righe = tutti.filter(t => !stFiltro || t.a === stFiltro || t.b === stFiltro);
+  return `<div class="thead"><div><h2>Storico scambi</h2>
+      <div class="pos">Ogni operazione conclusa, dalla più recente.</div></div>
+    <div class="stats"><div class="stat"><div class="v">${tutti.length}</div><div class="l">Scambi registrati</div></div></div></div>
+    <div class="toolbar"><select id="stSq"><option value="">Tutte le squadre</option>
+      ${S.squadre.map(s => `<option ${stFiltro===s.nome?"selected":""}>${esc(s.nome)}</option>`).join("")}</select></div>
+    ${righe.length ? `<div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th style="width:64px">Stagione</th><th>Operazione</th><th style="width:118px">Data</th></tr></thead>
+      <tbody>${righe.map(t => `<tr><td style="color:var(--tx-faint)">${t.anno ? t.anno+"/"+String(t.anno+1).slice(2) : "—"}</td>
+        <td><b>${esc(t.a)} ⇄ ${esc(t.b)}</b><div style="color:var(--tx-faint);font-size:12.5px">${esc(t.testo)}</div></td>
+        <td style="color:var(--tx-faint)">${esc(t.quando)}</td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="card"><div class="ok-empty">Nessuno scambio registrato${stFiltro ? " per questa squadra" : " finora"}.</div></div>`}`;
+}
+
+/* ================= ACCESSO ================= */
+function mostraAccesso(errore){
+  document.getElementById("modalHost").innerHTML = `<div class="gate"><div class="gatebox">
+    <h1>Fantamanager</h1>
+    <p>Inserisci il codice che ti ha dato l'amministratore della lega.</p>
+    <input id="gCod" placeholder="codice di accesso" autocomplete="off" spellcheck="false">
+    <button class="btn pri" id="gVai">Entra</button>
+    <div class="msg" id="gMsg" style="color:var(--bad)">${errore ? esc(errore) : ""}</div>
+  </div></div>`;
+  const inp = document.getElementById("gCod");
+  const vai = async () => {
+    const v = inp.value.trim();
+    if(!v){ document.getElementById("gMsg").textContent = "Serve il codice"; return; }
+    document.getElementById("gMsg").style.color = "var(--tx-faint)";
+    document.getElementById("gMsg").textContent = "Verifico…";
+    try{ await entra(v); document.getElementById("modalHost").innerHTML = ""; await avvia(); }
+    catch(err){ mostraAccesso(err.message || "Codice non riconosciuto"); }
+  };
+  document.getElementById("gVai").onclick = vai;
+  inp.onkeydown = e => { if(e.key === "Enter") vai(); };
+  inp.focus();
+}
+
+/* ================= RICHIESTE (amministratore) ================= */
+function descriviAzione(a){
+  const sq = S.squadre.find(s => s.id === a.squadra_id);
+  const c = a.contenuto || {};
+  if(a.tipo === "draft"){
+    const pk = S.picks.find(p => p.id === c.pickId);
+    return `${esc(sq?.nome || a.squadra_id)} sceglie <b>${esc(c.nome || "?")}</b>${pk ? ` con la ${pk.giro}º del ${pk.anno}` : ""}`;
+  }
+  const altra = S.squadre.find(s => s.id === c.controparte);
+  const lato = (ids, cr, pk) => {
+    const nomi = (ids || []).map(id => (S.squadre.flatMap(s => s.rosa).find(p => p.id === id) || {}).nome).filter(Boolean);
+    return [nomi.join(", "), (pk||[]).length ? `${pk.length} pick` : "", cr ? `${cr} crediti` : ""].filter(Boolean).join(" + ") || "nulla";
+  };
+  return `<b>${esc(sq?.nome || a.squadra_id)}</b> cede ${esc(lato(c.miei, c.mieiCrediti, c.miePick))}, `
+       + `<b>${esc(altra?.nome || "?")}</b> cede ${esc(lato(c.suoi, c.suoiCrediti, c.suePick))}`;
+}
+
+function viewRichieste(){
+  if(!sonoAdmin()) return `<div class="thead"><div><h2>Richieste</h2></div></div>
+    <div class="card"><div class="ok-empty">Sezione riservata all'amministratore.</div></div>`;
+  const righe = azioni.map(a => `<div class="alert">
+      <span class="ic" style="color:var(--info)">${a.tipo === "draft" ? "◆" : "⇄"}</span>
+      <span class="tx"><b>${a.tipo === "draft" ? "Scelta al draft" : "Proposta di scambio"}</b>
+        <div style="color:var(--tx-dim);margin:3px 0 6px">${descriviAzione(a)}</div>
+        <div style="font-size:12px">${new Date(a.creata).toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"})}</div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn pri" data-ok="${a.id}">Accetta e applica</button>
+          <button class="btn dgr" data-no="${a.id}">Rifiuta</button>
+        </div></span></div>`).join("");
+  return `<div class="thead"><div><h2>Richieste</h2>
+      <div class="pos">Quello che i manager ti hanno chiesto. Accettando, l'operazione passa dagli stessi controlli del regolamento.</div></div>
+    <div class="stats"><div class="stat"><div class="v">${azioni.length}</div><div class="l">In attesa</div></div></div></div>
+    ${azioni.length ? `<div class="block">${righe}</div>`
+      : `<div class="card"><div class="ok-empty">Nessuna richiesta in attesa.</div></div>`}`;
+}
+
+async function decidi(id, esito, motivo){
+  const { error } = await db.rpc("decidi_azione",
+    { p_codice: codice, p_id: id, p_esito: esito, p_motivo: motivo || null });
+  if(error){ toast("Non riuscito: " + error.message); return false; }
+  await caricaAzioni();
+  return true;
+}
+
+async function applicaAzione(id){
+  const a = azioni.find(x => x.id === id);
+  if(!a) return;
+  if(a.tipo === "draft"){
+    const c = a.contenuto, pk = S.picks.find(p => p.id === c.pickId);
+    if(!pk || pk.assegnato){ toast("Quella pick non è più disponibile"); await decidi(id,"rifiutata","pick non disponibile"); render(); return; }
+    const sq = S.squadre.find(s => s.id === pk.possessore);
+    if(occupatiVivaio(sq) >= S.regole.slotPrimavera){ toast("Vivaio pieno"); await decidi(id,"rifiutata","vivaio pieno"); render(); return; }
+    const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
+    sq.rosa.push({ id:uid(), nome:c.nome, ruolo:c.ruolo, club:c.club, prezzo:0,
+      nato:c.nato ?? null, scadenza:`${pk.anno+dur}-09-01`, reparto:"primavera", fascia:c.fascia });
+    pk.assegnato = c.nome;
+  } else {
+    const c = a.contenuto;
+    const ia = S.squadre.findIndex(s => s.id === a.squadra_id);
+    const ib = S.squadre.findIndex(s => s.id === c.controparte);
+    if(ia < 0 || ib < 0){ toast("Squadre non trovate"); return; }
+    trade = { a:ia, b:ib, pa:new Set(c.miei||[]), pb:new Set(c.suoi||[]),
+              ka:new Set(c.miePick||[]), kb:new Set(c.suePick||[]),
+              ca:c.mieiCrediti||0, cb:c.suoiCrediti||0 };
+    const v = verificaScambio();
+    if(v.err.length){
+      toast("Non più valido: " + v.err[0]);
+      await decidi(id, "rifiutata", v.err[0]); render(); return;
+    }
+    eseguiScambio();
+  }
+  await decidi(id, "accettata");
+  save(); render(); toast("Richiesta applicata");
+}
+
+/* ================= PROPOSTE (manager) ================= */
+async function inviaAzione(tipo, contenuto){
+  if(!collegato){ toast("Non sei collegato al database"); return false; }
+  const { error } = await db.rpc("invia_azione",
+    { p_codice: codice, p_tipo: tipo, p_contenuto: contenuto });
+  if(error){ toast("Invio non riuscito: " + error.message); return false; }
+  return true;
+}
+
+async function proponiScambio(){
+  const v = verificaScambio();
+  if(v.err.length){ toast(v.err[0]); return; }
+  const A = S.squadre[trade.a], B = S.squadre[trade.b];
+  if(A.id !== io.squadra_id && B.id !== io.squadra_id){
+    toast("Puoi proporre solo scambi che coinvolgono la tua squadra"); return;
+  }
+  const io_e_A = A.id === io.squadra_id;
+  const ok = await inviaAzione("scambio", {
+    controparte: io_e_A ? B.id : A.id,
+    miei:  [...(io_e_A ? trade.pa : trade.pb)],
+    suoi:  [...(io_e_A ? trade.pb : trade.pa)],
+    miePick: [...(io_e_A ? trade.ka : trade.kb)],
+    suePick: [...(io_e_A ? trade.kb : trade.ka)],
+    mieiCrediti: io_e_A ? trade.ca : trade.cb,
+    suoiCrediti: io_e_A ? trade.cb : trade.ca
+  });
+  if(ok){
+    trade.pa.clear(); trade.pb.clear(); trade.ka.clear(); trade.kb.clear();
+    trade.ca = 0; trade.cb = 0;
+    render(); toast("Proposta inviata all'amministratore");
+  }
+}
+
+function viewControlli(){
+  const blocchi = S.squadre.map((s,i) => {
+    const pb = problemi(s);
+    if(!pb.length) return "";
+    return `<div class="block"><div class="bhead"><span class="t">${esc(s.nome)}</span><span class="c">${pb.length}</span></div>
+      ${pb.map(p => `<div class="alert"><span class="ic" style="color:var(--${p.lv==="bad"?"bad":p.lv==="warn"?"warn":"info"})">${p.lv==="bad"?"▲":p.lv==="warn"?"▲":"•"}</span>
+        <span class="tx"><b>${esc(p.t)}</b><div>${esc(p.d)}</div></span></div>`).join("")}</div>`;
+  }).join("");
+  return `<div class="thead"><div><h2>Controlli</h2>
+    <div class="pos">Ogni squadra viene confrontata con il regolamento a ogni modifica.</div></div></div>
+    ${blocchi || `<div class="card"><div class="ok-empty">Nessuna anomalia. Tutte le rose rispettano limiti di reparto, slot vivaio e scadenze.</div></div>`}`;
+}
+
+function viewRegole(){
+  const r = S.regole;
+  const num = (l,path,extra="") => `<div class="f"><label>${l}</label><input type="number" class="rule" data-path="${path}" value="${get(S,path)}" ${extra}></div>`;
+  return `<div class="thead"><div><h2>Regolamento</h2>
+    <div class="pos">Ogni valore è modificabile: i controlli e i calcoli si aggiornano subito.</div></div></div>
+    <div class="card"><h3>Rosa e vivaio</h3>
+      <div class="hint">Composizione della prima squadra e capienza del settore giovanile, fuori rosa inclusi.</div>
+      <div class="grid g4">
+        ${num("Portieri","regole.rosa.P")}${num("Difensori","regole.rosa.D")}
+        ${num("Centrocampisti","regole.rosa.C")}${num("Attaccanti","regole.rosa.A")}
+        ${num("Slot vivaio","regole.slotPrimavera")}
+        ${num("Massimo U23","regole.slotFascia.U23")}${num("Massimo U22","regole.slotFascia.U22")}
+        ${num("Massimo U21 e U20","regole.slotFascia.U21/U20")}
+      </div></div>
+    <div class="card"><h3>Contratti e crediti</h3>
+      <div class="hint">La durata in primavera dipende dalla fascia d'ingresso. La promozione in prima squadra fa ripartire il contratto.</div>
+      <div class="grid g4">
+        ${num("Crediti a stagione","regole.budget")}
+        ${num("Durata prima squadra","regole.durataPrima")}
+        ${num("Durata U23","regole.durataPrimavera.U23")}${num("Durata U22","regole.durataPrimavera.U22")}
+        ${num("Durata U21","regole.durataPrimavera.U21")}${num("Durata U20","regole.durataPrimavera.U20")}
+        <div class="f"><label>Anno stagione in corso</label><input type="number" class="rule" data-path="annoStagione" value="${S.annoStagione}"></div>
+      </div></div>
+    <div class="card"><h3>Riconferme per posizione</h3>
+      <div class="hint">Chi vince ne ha meno. Dalla quarta in giù vale il valore predefinito.</div>
+      <div class="grid g4">
+        ${num("1º classificato","regole.riconferme.1")}${num("2º classificato","regole.riconferme.2")}
+        ${num("3º classificato","regole.riconferme.3")}${num("Dal 4º in giù","regole.riconferme.default")}
+      </div></div>
+    <div class="card"><h3>Scambi e picks</h3>
+      <div class="hint">Il pareggio dei ruoli obbliga ogni reparto della prima squadra a restare invariato. Le picks sono generate per le annate a venire, un giro per ogni slot del vivaio.</div>
+      <div class="grid g4">
+        <div class="f"><label>Pareggio dei ruoli</label>
+          <select id="togglePareggio"><option value="1" ${r.pareggioRuoli?"selected":""}>Obbligatorio</option>
+            <option value="0" ${!r.pareggioRuoli?"selected":""}>Libero</option></select></div>
+        ${num("Annate di picks","regole.stagioniPick")}${num("Giri per annata","regole.giriPick")}
+        <div class="f"><label>Picks in circolazione</label><input value="${S.picks.length}" disabled></div>
+      </div>
+      <div class="btnrow"><button class="btn" id="btnRigeneraPicks">Rigenera le picks</button></div>
+      <div class="hint" style="margin:10px 0 0">Rigenerando, ogni squadra torna proprietaria delle proprie picks: gli scambi di picks già fatti vengono annullati.</div></div>
+    <div class="card"><h3>Probabilità della prima scelta al draft</h3>
+      <div class="hint">Percentuali di partenza per le posizioni dalla quarta alla decima. Dopo ogni estrazione i pesi rimasti vengono rinormalizzati, così nessuno ha la prima scelta garantita.</div>
+      <div class="grid g4">
+        ${[10,9,8,7,6,5,4].map(p => num(p+"º posto","regole.lottery."+p)).join("")}
+      </div>
+      <div class="hint" style="margin:12px 0 0">Somma attuale: <b>${[10,9,8,7,6,5,4].reduce((n,p)=>n+(+r.lottery[p]||0),0)}%</b></div></div>`;
+}
+
+/* ================= interazione ================= */
+function bindView(){
+  document.querySelectorAll("[data-team]").forEach(el => {
+    if(el.classList.contains("tbtn")) el.onclick = () => { sel = +el.dataset.team; render(); };
+  });
+  document.querySelectorAll(".row[data-pl]").forEach(el => el.onclick = () => openPlayer(el.dataset.pl));
+  const add = document.getElementById("btnAdd");
+  if(add) add.onclick = () => openPlayer(null);
+
+  document.querySelectorAll(".rc").forEach(cb => cb.onchange = () => {
+    const p = findPlayer(cb.dataset.pl);
+    p.riconferma = cb.checked; save(); render();
+  });
+  document.querySelectorAll(".qt").forEach(inp => inp.onchange = () => {
+    const p = findPlayer(inp.dataset.pl);
+    const v = inp.value === "" ? null : +inp.value;
+    // se coincide con la quotazione ufficiale non è una forzatura: torno a seguire il listone
+    p.quotazione = (v === null || v === quotazioneUfficiale(p)) ? null : v;
+    save(); render();
+  });
+  const rq = document.getElementById("btnResetQt");
+  if(rq) rq.onclick = () => {
+    team().rosa.forEach(p => p.quotazione = null); save(); render();
+    toast("Quotazioni riallineate al listone");
+  };
+  const clr = document.getElementById("btnClearRc");
+  if(clr) clr.onclick = () => { team().rosa.forEach(p => p.riconferma = false); save(); render(); };
+
+  document.querySelectorAll("select.pos").forEach(s => s.onchange = () => {
+    const i = +s.dataset.team, v = s.value ? +s.value : null;
+    if(v) S.squadre.forEach((t,n) => { if(n !== i && t.posizione === v) t.posizione = null; });
+    S.squadre[i].posizione = v; save(); render();
+  });
+  const lot = document.getElementById("btnLottery");
+  if(lot) lot.onclick = estraiDraft;
+  document.querySelectorAll("button[data-pick]").forEach(b =>
+    b.onclick = () => apriScelta(b.dataset.pick));
+
+  document.querySelectorAll("input.rule").forEach(inp => inp.onchange = () => {
+    set(S, inp.dataset.path, +inp.value); save(); render();
+  });
+
+  /* --- classifica --- */
+  document.querySelectorAll("input.punti").forEach(inp => inp.onchange = () => {
+    S.squadre[+inp.dataset.team].punti = inp.value === "" ? null : +inp.value; save(); render();
+  });
+  const dp = document.getElementById("btnDaPunti");
+  if(dp) dp.onclick = () => {
+    const conPunti = S.squadre.filter(s => s.punti != null);
+    if(conPunti.length < 2){ toast("Servono i punti di almeno due squadre"); return; }
+    [...conPunti].sort((a,b) => b.punti - a.punti).forEach((s,i) => s.posizione = i+1);
+    S.squadre.filter(s => s.punti == null).forEach(s => s.posizione = null);
+    save(); render(); toast("Classifica ordinata in base ai punti");
+  };
+  const az = document.getElementById("btnAzzeraCl");
+  if(az) az.onclick = () => conferma("Azzerare la classifica?",
+    "Posizioni e punti tornano vuoti. Riconferme e ordine del draft resteranno da ricalcolare.",
+    () => { S.squadre.forEach(s => { s.posizione = null; s.punti = null; });
+            document.getElementById("modalHost").innerHTML = ""; save(); render(); toast("Classifica azzerata"); });
+
+  /* --- storico --- */
+  const st = document.getElementById("stSq");
+  if(st) st.onchange = () => { stFiltro = st.value; render(); };
+
+  const tp = document.getElementById("togglePareggio");
+  if(tp) tp.onchange = () => { S.regole.pareggioRuoli = tp.value === "1"; save(); render(); };
+  const rp = document.getElementById("btnRigeneraPicks");
+  if(rp) rp.onclick = () => conferma("Rigenerare le picks?",
+    "Ogni squadra torna proprietaria delle proprie picks e gli scambi di picks già registrati vengono annullati.",
+    () => { S.picks = generaPicks(S); document.getElementById("modalHost").innerHTML = "";
+            save(); render(); toast("Picks rigenerate"); });
+
+  /* --- listone: filtri e importazione --- */
+  const q = document.getElementById("lq");
+  if(q) q.oninput = deb(() => { lq = q.value; const at = document.activeElement === q; render();
+    if(at){ const n = document.getElementById("lq"); if(n){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); } } }, 220);
+  [["lruolo", v => lruolo = v], ["lclub", v => lclub = v], ["lstato", v => lstato = v]].forEach(([id,fn]) => {
+    const el = document.getElementById(id);
+    if(el) el.onchange = () => { fn(el.value); render(); };
+  });
+  const fi = document.getElementById("listFile");
+  const pf = document.getElementById("btnPickFile");
+  if(pf) pf.onclick = () => fi.click();
+  if(fi) fi.onchange = e => { if(e.target.files[0]) leggiListone(e.target.files[0]); };
+  const dz = document.getElementById("drop");
+  if(dz){
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add("hot"); };
+    dz.ondragleave = () => dz.classList.remove("hot");
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove("hot");
+      if(e.dataTransfer.files[0]) leggiListone(e.dataTransfer.files[0]); };
+  }
+  const rl = document.getElementById("btnRicarica");
+  if(rl) rl.onclick = () => { S.listone = []; S.listoneInfo = null; save(); render(); };
+
+  /* --- scambi --- */
+  document.querySelectorAll(".tradeteam").forEach(s => s.onchange = () => {
+    const side = s.dataset.side;
+    trade[side] = +s.value;
+    trade["p"+side].clear(); trade["k"+side].clear(); trade["c"+side] = 0;
+    render();
+  });
+  document.querySelectorAll(".selrow[data-pl]").forEach(el => el.onclick = () => {
+    const set_ = trade["p" + el.dataset.side], id = el.dataset.pl;
+    set_.has(id) ? set_.delete(id) : set_.add(id);
+    render();
+  });
+  document.querySelectorAll(".chip[data-pk]").forEach(el => el.onclick = () => {
+    const set_ = trade["k" + el.dataset.side], id = el.dataset.pk;
+    set_.has(id) ? set_.delete(id) : set_.add(id);
+    render();
+  });
+  document.querySelectorAll(".tradecr").forEach(el => el.onchange = () => {
+    trade["c" + el.dataset.side] = Math.max(0, +el.value || 0); render();
+  });
+  const bt = document.getElementById("btnTrade");
+  if(bt) bt.onclick = () => sonoAdmin() ? eseguiScambio() : proponiScambio();
+  document.querySelectorAll("[data-ok]").forEach(b =>
+    b.onclick = () => applicaAzione(+b.dataset.ok));
+  document.querySelectorAll("[data-no]").forEach(b =>
+    b.onclick = async () => { if(await decidi(+b.dataset.no, "rifiutata")){ render(); toast("Richiesta rifiutata"); } });
+  const bc = document.getElementById("btnTradeClear");
+  if(bc) bc.onclick = () => {
+    trade.pa.clear(); trade.pb.clear(); trade.ka.clear(); trade.kb.clear();
+    trade.ca = 0; trade.cb = 0; render();
+  };
+}
+function deb(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+function findPlayer(id){
+  for(const s of S.squadre){ const p = s.rosa.find(x => x.id === id); if(p) return p; }
+  return null;
+}
+
+function openPlayer(id){
+  const sq = team();
+  const p = id ? findPlayer(id) : { id:uid(), nome:"", ruolo:"C", club:"", prezzo:1,
+    scadenza:`${S.annoStagione + S.regole.durataPrima}-09-01`, reparto:"prima", fascia:null, _nuovo:true };
+  const isNew = !!p._nuovo;
+  const a = anniResidui(p);
+  const html = `<div class="scrim" id="scrim"><div class="modal">
+    <div class="mhead"><h3>${isNew ? "Nuovo giocatore" : esc(p.nome)}</h3>
+      <div class="s">${esc(sq.nome)}${!isNew && a !== null ? " · " + (a > 0 ? a + " stagioni residue" : "contratto scaduto") : ""}</div></div>
+    <div class="mbody">
+      <div class="grid g2">
+        <div class="f" style="grid-column:1/-1"><label>Nome</label><input id="mNome" value="${esc(p.nome)}"></div>
+        <div class="f"><label>Ruolo</label><select id="mRuolo">${RUOLI.map(r => `<option ${p.ruolo===r?"selected":""}>${r}</option>`).join("")}</select></div>
+        <div class="f"><label>Club di Serie A</label><input id="mClub" value="${esc(p.club||"")}" placeholder="vuoto se ha lasciato la A"></div>
+        <div class="f"><label>Prezzo d'acquisto</label><input type="number" id="mPrezzo" min="0" value="${p.prezzo ?? 0}"></div>
+        <div class="f"><label>Quotazione attuale</label><input type="number" id="mQuot" min="0" value="${p.quotazione ?? ""}" placeholder="${quotazioneUfficiale(p) ?? "—"}"></div>
+        <div class="f"><label>Scadenza contratto</label><input type="date" id="mScad" value="${p.scadenza || ""}"></div>
+        <div class="f"><label>Collocazione</label><select id="mRep">
+          <option value="prima" ${p.reparto==="prima"?"selected":""}>Prima squadra</option>
+          <option value="primavera" ${p.reparto==="primavera"?"selected":""}>Primavera</option>
+          <option value="fuori_rosa" ${p.reparto==="fuori_rosa"?"selected":""}>Fuori rosa</option></select></div>
+        <div class="f"><label>Anno di nascita</label><input type="number" id="mNato" min="1970" max="${S.annoStagione}" value="${p.nato ?? ""}" placeholder="rende la fascia esatta"></div>
+        <div class="f" id="wrapFascia" style="${p.reparto==="primavera"?"":"display:none"}"><label>Fascia</label>
+          <select id="mFascia"><option value="">—</option>${FASCE.map(f => `<option ${p.fascia===f?"selected":""}>${f}</option>`).join("")}</select></div>
+      </div>
+      ${!isNew ? `<div class="btnrow">
+        ${p.reparto === "primavera" || p.reparto === "fuori_rosa"
+          ? `<button class="btn" id="mPromuovi">Promuovi in prima squadra</button>` : ""}
+        ${p.reparto === "prima" ? `<button class="btn" id="mRetrocedi">Manda in primavera come fuori rosa</button>` : ""}
+      </div>` : ""}
+    </div>
+    <div class="mfoot">
+      ${!isNew ? `<button class="btn dgr" id="mSvincola">Svincola</button>` : ""}
+      <button class="btn" id="mAnnulla">Annulla</button>
+      <button class="btn pri" id="mSalva">${isNew ? "Aggiungi" : "Salva"}</button>
+    </div></div></div>`;
+  document.getElementById("modalHost").innerHTML = html;
+
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("mAnnulla").onclick = close;
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  document.getElementById("mRep").onchange = e => {
+    document.getElementById("wrapFascia").style.display = e.target.value === "primavera" ? "" : "none";
+  };
+  document.getElementById("mSalva").onclick = () => {
+    const nome = document.getElementById("mNome").value.trim();
+    if(!nome){ toast("Serve il nome del giocatore"); return; }
+    p.nome = nome;
+    p.ruolo = document.getElementById("mRuolo").value;
+    p.club = document.getElementById("mClub").value.trim();
+    p.prezzo = +document.getElementById("mPrezzo").value;
+    const q = document.getElementById("mQuot").value;
+    p.quotazione = q === "" ? null : +q;
+    p.scadenza = document.getElementById("mScad").value || null;
+    const nn = document.getElementById("mNato").value;
+    p.nato = nn === "" ? null : +nn;
+    p.reparto = document.getElementById("mRep").value;
+    p.fascia = p.reparto === "primavera"
+      ? (fasciaEsatta(p, S.annoStagione) || document.getElementById("mFascia").value || null)
+      : null;
+    if(isNew){ delete p._nuovo; sq.rosa.push(p); }
+    save(); close(); render();
+    toast(isNew ? `${nome} aggiunto alla rosa` : "Modifiche salvate");
+  };
+  const sv = document.getElementById("mSvincola");
+  if(sv) sv.onclick = () => {
+    conferma(`Svincolare ${p.nome}?`, "Il giocatore lascia la rosa e torna disponibile per tutti. Per riprenderlo all'asta dovrai offrire almeno un credito in più del prezzo attuale.", () => {
+      sq.rosa = sq.rosa.filter(x => x.id !== p.id);
+      sq.svincolati = sq.svincolati || [];
+      sq.svincolati.push({ nome:p.nome, prezzo:p.prezzo, anno:S.annoStagione });
+      save(); close(); render(); toast(`${p.nome} svincolato`);
+    });
+  };
+  const pr = document.getElementById("mPromuovi");
+  if(pr) pr.onclick = () => {
+    const era = p.reparto;
+    p.reparto = "prima"; p.fascia = null;
+    // il contratto riparte solo se arriva dalla primavera; il fuori rosa lo mantiene
+    if(era === "primavera") p.scadenza = `${S.annoStagione + S.regole.durataPrima}-09-01`;
+    save(); close(); render();
+    toast(era === "primavera" ? `${p.nome} promosso, contratto ripartito da ${S.regole.durataPrima} stagioni` : `${p.nome} rientra in prima squadra col contratto invariato`);
+  };
+  const rt = document.getElementById("mRetrocedi");
+  if(rt) rt.onclick = () => {
+    p.reparto = "fuori_rosa"; p.fascia = null;
+    save(); close(); render();
+    toast(`${p.nome} in vivaio come fuori rosa, contratto invariato`);
+  };
+}
+
+/* ---- lottery ---- */
+function estraiDraft(){
+  const pesi = S.regole.lottery;
+  let pool = S.squadre.filter(s => s.posizione >= 4).map(s => ({ s, w: +pesi[s.posizione] || 0 }));
+  const ordine = [];
+  while(pool.length){
+    const tot = pool.reduce((n,x) => n + x.w, 0);
+    let r = Math.random() * (tot || pool.length), k = 0;
+    for(; k < pool.length; k++){ r -= (tot ? pool[k].w : 1); if(r <= 0) break; }
+    k = Math.min(k, pool.length - 1);
+    ordine.push(pool[k].s.id);
+    pool.splice(k,1);
+  }
+  [3,2,1].forEach(pos => {
+    const s = S.squadre.find(x => x.posizione === pos);
+    if(s) ordine.push(s.id);
+  });
+  S.ultimoDraft = { anno: annoDraft(), ordine,
+    quando: new Date().toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"}) };
+  save(); render(); toast("Ordine del draft estratto");
+}
+
+/* ---- utility ---- */
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function get(o,p){ return p.split(".").reduce((a,k) => a?.[k], o); }
+function set(o,p,v){ const k = p.split("."); const l = k.pop(); k.reduce((a,x) => a[x], o)[l] = v; }
+function toast(m){
+  const h = document.getElementById("toastHost");
+  h.innerHTML = `<div class="toast">${esc(m)}</div>`;
+  setTimeout(() => h.innerHTML = "", 2600);
+}
+function conferma(titolo, testo, ok){
+  const host = document.getElementById("modalHost");
+  const prev = host.innerHTML;
+  host.innerHTML = `<div class="scrim"><div class="modal" style="width:min(400px,100%)">
+    <div class="mhead"><h3>${esc(titolo)}</h3></div>
+    <div class="mbody"><div class="hint" style="margin:0">${esc(testo)}</div></div>
+    <div class="mfoot"><button class="btn" id="cNo">Annulla</button><button class="btn dgr" id="cSi">Conferma</button></div></div></div>`;
+  document.getElementById("cNo").onclick = () => host.innerHTML = prev;
+  document.getElementById("cSi").onclick = ok;
+}
+
+/* ---- barra laterale ---- */
+document.getElementById("btnNext").onclick = () => {
+  const a = S.annoStagione + 1;
+  conferma(`Passare alla stagione ${a}/${String(a+1).slice(2)}?`,
+    `I contratti giunti a termine liberano i giocatori, le fasce del vivaio salgono di un anno e i crediti tornano a ${S.regole.budget} per tutti. La stagione attuale viene archiviata, così puoi tornare indietro.`,
+    () => { document.getElementById("modalHost").innerHTML = ""; avanzaStagione(); });
+};
+document.getElementById("btnPrev").onclick = () => { if(S.archivio && S.archivio.length) tornaIndietro(); };
+
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+function esportaDati(){
+  const b = new Blob([JSON.stringify(S,null,1)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b);
+  a.download = `fantamanager_${S.annoStagione}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Dati esportati");
+}
+document.getElementById("btnExport").onclick = esportaDati;
+document.getElementById("btnImport").onclick = () => document.getElementById("fileIn").click();
+document.getElementById("fileIn").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const d = JSON.parse(rd.result);
+      if(!d.squadre) throw 0;
+      S = d; sel = 0; save(); render(); toast("Dati importati");
+    }catch(err){ toast("Il file non contiene dati di lega validi"); }
+  };
+  rd.readAsText(f);
+};
+document.getElementById("btnReset").onclick = () => {
+  conferma("Ripristinare i dati iniziali?", "Torni alle rose dell'export ufficiale del 21 luglio 2026, con il vivaio ripreso dal foglio contratti di gennaio. Tutte le modifiche fatte qui vanno perse: esportale prima se ti servono.", () => {
+    S = freshState(); sel = 0; document.getElementById("modalHost").innerHTML = "";
+    save(); render(); toast("Dati iniziali ripristinati");
+  });
+};
+
+/* ---- avvio ---- */
+async function avvia(){
+  S = await load();
+  try{
+    const remoto = await scaricaStato();
+    if(remoto){ S = remoto; collegato = true; }
+    else if(sonoAdmin()){
+      collegato = true;
+      await inviaStato();                 // prima accensione: pubblico le rose locali
+      toast("Rose pubblicate sul database");
+    } else {
+      toast("L'amministratore non ha ancora pubblicato la lega");
+    }
+  }catch(e){ toast("Collegamento non riuscito: " + (e.message||e)); }
+  if(collegato){ await caricaAzioni(); ascolta(); }
+  if(!sonoAdmin()) tab = "rosa";
+  render();
+  if(sonoAdmin() && datiVecchi()) proponiAggiornamento();
+}
+
+(async () => {
+  apriDb();
+  let salvato = null;
+  try{ const r = await window.storage.get(CODICE_KEY); salvato = r && r.value; }catch(e){}
+  if(salvato){
+    try{ await entra(salvato); await avvia(); return; }catch(e){}
+  }
+  S = await load(); render();
+  mostraAccesso();
+})();
+</script>
