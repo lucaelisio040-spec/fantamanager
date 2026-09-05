@@ -900,10 +900,10 @@ function viewDraft(){
     const slotLiberi = Math.max(0, S.regole.slotPrimavera - occupatiVivaio(s));
     const peso = s.posizione && pesi[s.posizione] != null ? pesi[s.posizione] + "%" : (s.posizione ? "scelta fissa" : "—");
     return `<tr><td>${esc(s.nome)}</td>
-      <td><select class="pos" data-team="${i}">
-        <option value="">—</option>
-        ${S.squadre.map((_,n) => `<option value="${n+1}" ${s.posizione===n+1?"selected":""}>${n+1}º</option>`).join("")}
-      </select></td>
+      <td>${sonoAdmin()
+        ? `<select class="pos" data-team="${i}"><option value="">—</option>
+           ${S.squadre.map((_,n) => `<option value="${n+1}" ${s.posizione===n+1?"selected":""}>${n+1}º</option>`).join("")}</select>`
+        : `<span style="color:var(--tx-faint)">${s.posizione ? s.posizione+"º" : "—"}</span>`}</td>
       <td class="num">${nRiconferme(s)}</td>
       <td class="num">${slotLiberi}</td>
       <td class="num">${peso}</td></tr>`;
@@ -911,12 +911,14 @@ function viewDraft(){
   return `<div class="thead"><div><h2>Draft primavera</h2>
       <div class="pos">Le prime tre classificate prendono le ultime tre scelte. Dalla quarta alla decima si estrae a sorte, con più probabilità a chi ha chiuso peggio.</div></div></div>
     ${legendaFasce(annoDraft(), "chi scegli al draft deve rientrare in una di queste fasce")}
-    ${mancanti ? `<div class="card" style="border-color:var(--warn)"><h3>Classifica incompleta</h3>
+    ${mancanti && sonoAdmin() ? `<div class="card" style="border-color:var(--warn)"><h3>Classifica incompleta</h3>
       <div class="hint" style="margin:0">Mancano ${mancanti} posizioni. Assegnale dalla scheda Classifica per poter estrarre l'ordine.</div></div>` : ""}
     <div class="card" style="padding:0;overflow:hidden">
       <table><thead><tr><th>Squadra</th><th style="width:96px">Posizione</th><th class="num">Riconferme</th><th class="num">Slot liberi</th><th class="num">Prob. 1ª scelta</th></tr></thead>
       <tbody>${righe}</tbody></table></div>
-    <div class="btnrow"><button class="btn pri" id="btnLottery" ${mancanti?"disabled style='opacity:.45'":""}>${S.ultimoDraft?"Riestrai l'ordine":"Estrai ordine del draft"}</button></div>
+    ${sonoAdmin()
+      ? `<div class="btnrow"><button class="btn pri" id="btnLottery" ${mancanti?"disabled style='opacity:.45'":""}>${S.ultimoDraft?"Riestrai l'ordine":"Estrai ordine del draft"}</button></div>`
+      : `<div class="hint" style="margin-top:12px">${S.ultimoDraft ? "L'ordine è stato estratto dall'amministratore. Quando tocca a te, premi Scegli sulla tua casella." : "L'amministratore non ha ancora estratto l'ordine."}</div>`}
     ${lavagnaDraft()}`;
 }
 
@@ -1450,22 +1452,27 @@ function viewClassifica(){
     return `<tr class="${i===sel?"me":""}">
       <td class="rank ${pos && pos<=3 ? "medal":""}">${pos || "—"}</td>
       <td>${esc(s.nome)}</td>
-      <td><select class="pos" data-team="${i}"><option value="">—</option>
-        ${S.squadre.map((_,n) => `<option value="${n+1}" ${pos===n+1?"selected":""}>${n+1}º</option>`).join("")}</select></td>
-      <td><input type="number" class="punti" data-team="${i}" value="${s.punti ?? ""}" placeholder="—" style="width:74px"></td>
+      <td>${sonoAdmin()
+        ? `<select class="pos" data-team="${i}"><option value="">—</option>
+            ${S.squadre.map((_,n) => `<option value="${n+1}" ${pos===n+1?"selected":""}>${n+1}º</option>`).join("")}</select>`
+        : `<span style="color:var(--tx-faint)">${pos ? pos+"º" : "—"}</span>`}</td>
+      <td>${sonoAdmin()
+        ? `<input type="number" class="punti" data-team="${i}" value="${s.punti ?? ""}" placeholder="—" style="width:74px">`
+        : `<span style="color:var(--tx-faint)">${s.punti ?? "—"}</span>`}</td>
       <td class="num">${nRiconferme(s)}</td>
       <td class="num">${pos ? (pos <= 3 ? "scelta fissa" : (S.regole.lottery[pos] ?? 0) + "%") : "—"}</td></tr>`;
   }).join("");
   return `<div class="thead"><div><h2>Classifica</h2>
-      <div class="pos">La posizione finale determina quante riconferme hai e dove peschi al draft.</div></div>
+      <div class="pos">La posizione finale determina quante riconferme hai e dove peschi al draft.${sonoAdmin() ? "" : " Solo l'amministratore può modificarla."}</div></div>
     <div class="stats"><div class="stat"><div class="v">${assegnate}/${S.squadre.length}</div><div class="l">Posizioni assegnate</div></div></div></div>
     <div class="card" style="padding:0;overflow:hidden">
       <table><thead><tr><th style="width:38px">Pos</th><th>Squadra</th><th style="width:92px">Assegna</th>
         <th style="width:88px">Punti</th><th class="num">Riconferme</th><th class="num">Prob. 1ª scelta</th></tr></thead>
       <tbody>${righe}</tbody></table></div>
-    <div class="btnrow">
+    ${sonoAdmin() ? `<div class="btnrow">
       <button class="btn" id="btnDaPunti">Ordina in base ai punti</button>
-      <button class="btn" id="btnAzzeraCl">Azzera la classifica</button></div>`;
+      <button class="btn" id="btnAzzeraCl">Azzera la classifica</button></div>`
+    : `<div class="hint" style="margin-top:12px">La classifica la inserisce l'amministratore: da qui determina quante riconferme spettano a ciascuno e l'ordine del draft.</div>`}`;
 }
 
 /* ================= STORICO ================= */
