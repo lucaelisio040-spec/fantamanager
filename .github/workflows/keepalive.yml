@@ -1,0 +1,33 @@
+name: Tieni sveglio Supabase
+
+# Supabase sospende i progetti gratuiti dopo 7 giorni senza attivita sul
+# database. Questa sveglia fa una lettura ogni due giorni, cosi il contatore
+# non arriva mai a sette. Si puo anche lanciare a mano dalla scheda Actions.
+on:
+  schedule:
+    - cron: "0 6 */2 * *"
+  workflow_dispatch:
+
+jobs:
+  sveglia:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Interroga il database
+        env:
+          SUPA_URL: ${{ secrets.SUPA_URL }}
+          SUPA_KEY: ${{ secrets.SUPA_KEY }}
+        run: |
+          set -euo pipefail
+          codice=$(curl -s -o /tmp/risposta.txt -w "%{http_code}" \
+            "${SUPA_URL}/rest/v1/stato?select=versione&id=eq.1" \
+            -H "apikey: ${SUPA_KEY}" \
+            -H "Authorization: Bearer ${SUPA_KEY}")
+
+          echo "Risposta HTTP: $codice"
+          cat /tmp/risposta.txt
+
+          if [ "$codice" != "200" ]; then
+            echo "::error::Il database non ha risposto correttamente. Controlla se il progetto e in pausa."
+            exit 1
+          fi
+          echo "Progetto attivo, contatore di inattivita azzerato."
