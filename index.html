@@ -69,6 +69,8 @@ tr.me td{background:#17222E}
 .thead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:22px 0 16px;flex-wrap:wrap}
 .thead h2{font-size:34px;font-weight:700;text-transform:uppercase;line-height:1}
 .thead .pos{font-size:13px;color:var(--tx-faint);margin-top:3px}
+.matita{font-size:17px;color:var(--tx-faint);vertical-align:6px;padding:2px 6px;border-radius:4px}
+.matita:hover{color:var(--info);background:var(--raised)}
 .stats{display:flex;gap:26px;flex-wrap:wrap}
 .stat .v{font-family:'Barlow Condensed';font-size:26px;font-weight:600;line-height:1}
 .stat .l{font-size:11.5px;color:var(--tx-faint);margin-top:1px}
@@ -685,7 +687,7 @@ function render(){
   const led = document.getElementById("led"), stx = document.getElementById("syncTx");
   led.className = "led " + (collegato ? "on" : "off");
   stx.textContent = collegato
-    ? (sonoAdmin() ? `amministratore · v${versione}` : `${io.nome} · sola lettura`)
+    ? (sonoAdmin() ? `amministratore · v${versione}` : `${miaSquadra()?.nome || io.nome} · sola lettura`)
     : "non collegato";
   const tr = document.getElementById("tabRich");
   if(tr){ tr.classList.toggle("hidden", !sonoAdmin());
@@ -774,7 +776,7 @@ function viewRosa(){
                  <div class="hint">Usalo per un acquisto all'asta, una scelta al draft o un arrivo in scambio.</div>
                  <button class="btn pri" id="btnAdd">Aggiungi alla rosa</button></div>`;
   return `<div class="thead">
-      <div><h2>${esc(sq.nome)}</h2>
+      <div><h2>${esc(sq.nome)}${(sonoAdmin() || sq.id === io?.squadra_id) ? ` <button class="matita" id="btnNome" title="Cambia il nome della squadra">✎</button>` : ""}</h2>
         <div class="pos">${sq.posizione ? sq.posizione+"º posto la scorsa stagione" : "Posizione non impostata"} · ${nRiconferme(sq)} riconferme disponibili</div></div>
       <div class="stats">
         <div class="stat"><div class="v">${sq.crediti_residui}</div><div class="l">Crediti residui</div></div>
@@ -1465,6 +1467,9 @@ function mostraAccesso(errore){
 function descriviAzione(a){
   const sq = S.squadre.find(s => s.id === a.squadra_id);
   const c = a.contenuto || {};
+  if(a.tipo === "nome"){
+    return `${esc(sq?.nome || a.squadra_id)} vuole chiamarsi <b>${esc(c.nome || "?")}</b>`;
+  }
   if(a.tipo === "draft"){
     const pk = S.picks.find(p => p.id === c.pickId);
     return `${esc(sq?.nome || a.squadra_id)} sceglie <b>${esc(c.nome || "?")}</b>${pk ? ` con la ${pk.giro}º del ${pk.anno}` : ""}`;
@@ -1482,8 +1487,8 @@ function viewRichieste(){
   if(!sonoAdmin()) return `<div class="thead"><div><h2>Richieste</h2></div></div>
     <div class="card"><div class="ok-empty">Sezione riservata all'amministratore.</div></div>`;
   const righe = azioni.map(a => `<div class="alert">
-      <span class="ic" style="color:var(--info)">${a.tipo === "draft" ? "◆" : "⇄"}</span>
-      <span class="tx"><b>${a.tipo === "draft" ? "Scelta al draft" : "Proposta di scambio"}</b>
+      <span class="ic" style="color:var(--info)">${a.tipo === "draft" ? "◆" : a.tipo === "nome" ? "✎" : "⇄"}</span>
+      <span class="tx"><b>${a.tipo === "draft" ? "Scelta al draft" : a.tipo === "nome" ? "Cambio di nome" : "Proposta di scambio"}</b>
         <div style="color:var(--tx-dim);margin:3px 0 6px">${descriviAzione(a)}</div>
         <div style="font-size:12px">${new Date(a.creata).toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"})}</div>
         <div class="btnrow" style="margin-top:8px">
@@ -1508,6 +1513,18 @@ async function decidi(id, esito, motivo){
 async function applicaAzione(id){
   const a = azioni.find(x => x.id === id);
   if(!a) return;
+  if(a.tipo === "nome"){
+    return `${esc(sq?.nome || a.squadra_id)} vuole chiamarsi <b>${esc(c.nome || "?")}</b>`;
+  }
+  if(a.tipo === "nome"){
+    const sq = S.squadre.find(s => s.id === a.squadra_id);
+    const err = sq ? validaNome(a.contenuto.nome, sq.id) : "Squadra non trovata";
+    if(err){ toast(err); await decidi(id, "rifiutata", err); render(); return; }
+    sq.nome = a.contenuto.nome;
+    await decidi(id, "accettata");
+    save(); render(); toast("Nome aggiornato");
+    return;
+  }
   if(a.tipo === "draft"){
     const c = a.contenuto, pk = S.picks.find(p => p.id === c.pickId);
     if(!pk || pk.assegnato){ toast("Quella pick non è più disponibile"); await decidi(id,"rifiutata","pick non disponibile"); render(); return; }
@@ -1567,6 +1584,45 @@ async function proponiScambio(){
     trade.ca = 0; trade.cb = 0;
     render(); toast("Proposta inviata all'amministratore");
   }
+}
+
+/* ================= NOME SQUADRA ================= */
+function apriNome(){
+  const sq = team();
+  const proponi = !sonoAdmin();
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(420px,100%)">
+    <div class="mhead"><h3>Nome della squadra</h3>
+      <div class="s">${proponi ? "L'amministratore riceverà la richiesta e la confermerà." : "La modifica è immediata per tutti."}</div></div>
+    <div class="mbody">
+      <div class="f"><label>Come vuoi chiamarti</label>
+        <input id="nNome" value="${esc(sq.nome)}" maxlength="40" autocomplete="off"></div>
+      <div class="hint" style="margin:12px 0 0">Puoi cambiarlo quante volte vuoi: rose, contratti, picks e scambi restano agganciati alla squadra, non al nome.</div>
+    </div>
+    <div class="mfoot"><button class="btn" id="nNo">Annulla</button>
+      <button class="btn pri" id="nSi">${proponi ? "Invia richiesta" : "Salva"}</button></div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("nNo").onclick = close;
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  document.getElementById("nSi").onclick = async () => {
+    const nuovo = document.getElementById("nNome").value.trim().replace(/\s+/g," ");
+    const err = validaNome(nuovo, sq.id);
+    if(err){ toast(err); return; }
+    if(proponi){
+      if(sq.id !== io.squadra_id){ toast("Puoi rinominare solo la tua squadra"); return; }
+      if(await inviaAzione("nome", { nome: nuovo })){ close(); toast("Richiesta inviata all'amministratore"); }
+      return;
+    }
+    sq.nome = nuovo; save(); close(); render(); toast("Nome aggiornato");
+  };
+  document.getElementById("nNome").focus();
+}
+
+function validaNome(nuovo, idSquadra){
+  if(!nuovo) return "Il nome non può restare vuoto";
+  if(nuovo.length < 2) return "Serve un nome un po' più lungo";
+  if(S.squadre.some(s => s.id !== idSquadra && norm(s.nome) === norm(nuovo)))
+    return "C'è già una squadra con questo nome";
+  return null;
 }
 
 function viewControlli(){
@@ -1638,6 +1694,8 @@ function bindView(){
   document.querySelectorAll(".row[data-pl]").forEach(el => el.onclick = () => openPlayer(el.dataset.pl));
   const add = document.getElementById("btnAdd");
   if(add) add.onclick = () => openPlayer(null);
+  const bn = document.getElementById("btnNome");
+  if(bn) bn.onclick = apriNome;
 
   document.querySelectorAll(".rc").forEach(cb => cb.onchange = () => {
     const p = findPlayer(cb.dataset.pl);
