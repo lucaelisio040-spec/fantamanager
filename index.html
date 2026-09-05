@@ -94,6 +94,14 @@ tr.me td{background:#17222E}
 .row .fl{text-align:center;font-size:12px}
 .row.empty{color:var(--tx-faint);font-style:italic;cursor:default}
 .row.empty:hover{background:none}
+.row.eccedenza{background:#2A1614;box-shadow:inset 3px 0 0 var(--bad)}
+.row.eccedenza:hover{background:#331B18}
+.row.empty.manca{grid-template-columns:20px 1fr;background:#241D10;box-shadow:inset 3px 0 0 var(--warn);color:#E0B978}
+.row.empty.manca .rl{color:var(--warn);font-weight:700}
+.notaflag{padding:6px 12px;font-size:12px;border-top:1px solid var(--line-soft)}
+.notaflag.over{color:#E48278;background:#20120F}
+.notaflag.short{color:#D9B172;background:#1E1810}
+.bhead.short .c{color:var(--warn);font-weight:600}
 
 /* contract clock */
 .clock{display:flex;gap:2px;justify-content:flex-end}
@@ -700,7 +708,7 @@ function clock(p){
   return `<span class="clock" title="${a<=0?"Scaduto":a+" stagioni residue"}">${h}</span>`;
 }
 
-function rowPlayer(p){
+function rowPlayer(p, stato){
   const a = anniResidui(p);
   let flag = "";
   if(fuoriSerieA(p)) flag = `<span title="Fuori dalla Serie A" style="color:var(--bad)">✕</span>`;
@@ -709,7 +717,7 @@ function rowPlayer(p){
   const fasciaTag = p.reparto === "primavera" && p.fascia
     ? `<span class="pill" style="background:#2A2036;color:#C89BE8">${p.fascia}</span>` : "";
   const frTag = p.reparto === "fuori_rosa" ? `<span class="pill" style="background:#20303C;color:#8FC4E0">fuori rosa</span>` : "";
-  return `<div class="row" data-pl="${p.id}">
+  return `<div class="row ${stato||""}" data-pl="${p.id}">
     <span class="rl" style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span>
     <span class="nm"><b>${esc(p.nome)}</b> <span>${esc(p.club||"svincolato")}</span> ${fasciaTag}${frTag}</span>
     <span class="pz">${p.prezzo != null ? p.prezzo+" cr" : "—"}</span>
@@ -720,11 +728,20 @@ function rowPlayer(p){
 function blockRows(titolo, players, atteso){
   const over = atteso != null && players.length > atteso;
   const vuoti = atteso != null ? Math.max(0, atteso - players.length) : 0;
+  const eccesso = over ? players.length - atteso : 0;
+  // i giocatori oltre il limite del reparto vanno segnalati, non nascosti
+  const righe = players.map((p,i) =>
+    rowPlayer(p, atteso != null && i >= atteso ? "eccedenza" : "")).join("");
+  const mancanti = Array.from({length:vuoti}, () => `<div class="row empty manca">
+      <span class="rl">!</span><span>Manca un giocatore in questo reparto</span>
+      <span></span><span></span><span></span></div>`).join("");
   return `<div class="block">
-    <div class="bhead ${over?"over":""}"><span class="t">${titolo}</span>
+    <div class="bhead ${over?"over":""} ${vuoti?"short":""}"><span class="t">${titolo}</span>
       <span class="c">${players.length}${atteso!=null?" / "+atteso:""}</span></div>
-    ${players.map(rowPlayer).join("") || (atteso==null?`<div class="row empty"><span></span><span>Nessun giocatore</span><span></span><span></span><span></span></div>`:"")}
-    ${Array.from({length:vuoti},() => `<div class="row empty"><span></span><span>Slot libero</span><span></span><span></span><span></span></div>`).join("")}
+    ${righe || (atteso==null?`<div class="row empty"><span></span><span>Nessun giocatore</span><span></span><span></span><span></span></div>`:"")}
+    ${mancanti}
+    ${eccesso ? `<div class="notaflag over">${eccesso} ${eccesso===1?"giocatore":"giocatori"} oltre il limite: servono uno svincolo o uno scambio.</div>` : ""}
+    ${vuoti ? `<div class="notaflag short">${vuoti} ${vuoti===1?"posto libero":"posti liberi"} da riempire all'asta.</div>` : ""}
   </div>`;
 }
 
@@ -1288,44 +1305,56 @@ function tornaIndietro(){
 
 /* ---- allineamento delle rose al listone importato ---- */
 function confrontaConListone(){
-  const cambi = [], usciti = [];
+  const cambi = [], usciti = [], ruoli = [];
   S.squadre.forEach(sq => sq.rosa.forEach(p => {
     const l = S.listone.find(x => stessoGiocatore(x.nome, p.nome));
-    if(!l){ if(p.club) usciti.push({ p, sq }); }
-    else if(norm(l.club) !== norm(p.club || "")) cambi.push({ p, sq, da:p.club || "—", a:l.club });
+    if(!l){ if(p.club) usciti.push({ p, sq }); return; }
+    if(norm(l.club) !== norm(p.club || "")) cambi.push({ p, sq, da:p.club || "—", a:l.club });
+    // un cambio di ruolo sposta il giocatore di reparto e puo sbilanciare la rosa
+    if(l.ruolo && p.ruolo && l.ruolo !== p.ruolo) ruoli.push({ p, sq, da:p.ruolo, a:l.ruolo });
   }));
-  return { cambi, usciti };
+  return { cambi, usciti, ruoli };
 }
 
 function applicaListone(d){
   d.cambi.forEach(c => c.p.club = c.a);
+  d.ruoli.forEach(r => r.p.ruolo = r.a);
   d.usciti.forEach(u => u.p.club = "");   // vuoto significa fuori dalla Serie A
   save(); render();
-  toast(`${d.cambi.length} club aggiornati, ${d.usciti.length} fuori dalla Serie A`);
+  const pezzi = [];
+  if(d.cambi.length) pezzi.push(`${d.cambi.length} club aggiornati`);
+  if(d.ruoli.length) pezzi.push(`${d.ruoli.length} cambi di ruolo`);
+  if(d.usciti.length) pezzi.push(`${d.usciti.length} fuori dalla Serie A`);
+  toast(pezzi.join(", ") || "Nessuna modifica");
 }
 
 function proponiAllineamento(){
   const d = confrontaConListone();
-  if(!d.cambi.length && !d.usciti.length){ toast("Le rose sono già allineate al listone"); return; }
+  if(!d.cambi.length && !d.usciti.length && !d.ruoli.length){ toast("Le rose sono già allineate al listone"); return; }
   const riga = (t, s) => `<div class="alert"><span class="ic" style="color:var(--${s})">•</span><span class="tx">${t}</span></div>`;
   document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
     <div class="mhead"><h3>Allinea le rose al listone</h3>
-      <div class="s">Confronto fra i club del listone appena importato e quelli registrati nelle rose.</div></div>
+      <div class="s">Confronto fra il listone appena importato e quanto registrato nelle rose.</div></div>
     <div class="mbody">
-      <h3 style="font-size:15px;margin-bottom:6px">Cambi di squadra · ${d.cambi.length}</h3>
-      ${d.cambi.length ? d.cambi.slice(0,60).map(c =>
+      <h3 style="font-size:15px;margin-bottom:6px">Cambi di ruolo · ${d.ruoli.length}</h3>
+      <div class="hint" style="margin-bottom:8px">Cambiano reparto: se il nuovo reparto va oltre il limite te lo segnalo nella rosa.</div>
+      ${d.ruoli.length ? d.ruoli.map(r =>
+          riga(`<b>${esc(r.p.nome)}</b><div>${esc(r.sq.nome)} · ${RUOLO_NOME[r.da]} → <b style="color:var(--${r.a})">${RUOLO_NOME[r.a]}</b></div>`,"warn")).join("")
+        : `<div class="ok-empty">Nessuno.</div>`}
+      <h3 style="font-size:15px;margin:15px 0 6px">Cambi di squadra · ${d.cambi.length}</h3>
+      ${d.cambi.length ? d.cambi.slice(0,50).map(c =>
           riga(`<b>${esc(c.p.nome)}</b><div>${esc(c.sq.nome)} · ${esc(c.da)} → ${esc(c.a)}</div>`,"info")).join("")
         : `<div class="ok-empty">Nessuno.</div>`}
-      ${d.cambi.length > 60 ? `<div class="ok-empty">e altri ${d.cambi.length - 60}.</div>` : ""}
+      ${d.cambi.length > 50 ? `<div class="ok-empty">e altri ${d.cambi.length - 50}.</div>` : ""}
       <h3 style="font-size:15px;margin:15px 0 6px">Non più in Serie A · ${d.usciti.length}</h3>
       <div class="hint" style="margin-bottom:8px">Il regolamento libera subito lo slot, quindi vanno svincolati a mano dalla scheda del giocatore.</div>
-      ${d.usciti.length ? d.usciti.slice(0,60).map(u =>
+      ${d.usciti.length ? d.usciti.slice(0,50).map(u =>
           riga(`<b>${esc(u.p.nome)}</b><div>${esc(u.sq.nome)} · ${esc(u.p.club)}</div>`,"bad")).join("")
         : `<div class="ok-empty">Nessuno.</div>`}
-      ${d.usciti.length > 60 ? `<div class="ok-empty">e altri ${d.usciti.length - 60}.</div>` : ""}
+      ${d.usciti.length > 50 ? `<div class="ok-empty">e altri ${d.usciti.length - 50}.</div>` : ""}
     </div>
     <div class="mfoot"><button class="btn" id="mNo">Lascia com'è</button>
-      <button class="btn pri" id="mSi">Applica ${d.cambi.length + d.usciti.length} modifiche</button></div></div></div>`;
+      <button class="btn pri" id="mSi">Applica ${d.cambi.length + d.usciti.length + d.ruoli.length} modifiche</button></div></div></div>`;
   const close = () => document.getElementById("modalHost").innerHTML = "";
   document.getElementById("mNo").onclick = close;
   document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
