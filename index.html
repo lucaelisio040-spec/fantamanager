@@ -451,11 +451,16 @@ function ascolta(){
     .on("postgres_changes", { event:"*", schema:"public", table:"stato" }, async () => {
       if(sonoAdmin()) return;                 // l'admin è la fonte, non si riallinea a sé stesso
       const nuovo = await scaricaStato();
-      if(nuovo){ S = nuovo; render(); toast("Dati aggiornati dall'amministratore"); }
+      if(nuovo){ S = nuovo; await caricaConsegne(); await caricaMiaScelta(); render();
+                 toast("Dati aggiornati dall'amministratore"); }
     })
     .on("postgres_changes", { event:"*", schema:"public", table:"azioni" }, async () => {
       await caricaAzioni();
       if(sonoAdmin()) render();
+    })
+    .on("postgres_changes", { event:"*", schema:"public", table:"scelte" }, async () => {
+      await caricaConsegne();          // cambia solo il conto di chi ha consegnato
+      if(tab === "riconferme") render();
     })
     .subscribe();
 }
@@ -788,20 +793,70 @@ function viewRosa(){
 
 function viewRiconferme(){
   const sq = team();
+  if(!finestra()) return riconfermeInattive();
+  if(S.finestra.stato === "svelata") return viewRiconfermeChiuse(sq);
+  return sonoAdmin() ? pannelloAdmin() : schedaManager(sq);
+}
+
+function riconfermeInattive(){
+  const ultima = (S.storicoFinestre||[]).slice(-1)[0];
+  return `<div class="thead"><div><h2>Riconferme</h2>
+    <div class="pos">Nessuna finestra aperta al momento.</div></div></div>
+    ${ultima ? `<div class="banner">L'ultima è stata <b>${esc(ultima.nome)}</b>, svelata il ${esc(ultima.svelataIl)}.</div>` : ""}
+    ${sonoAdmin()
+      ? `<div class="card"><h3>Apri una finestra</h3>
+          <div class="hint">Ogni squadra sceglie in segreto chi tenere. Nessuno vede le scelte degli altri finché non sveli tu, e da quel momento le rose si aggiornano per tutti insieme.</div>
+          <div class="f" style="max-width:340px"><label>Come la chiami</label>
+            <input id="fNome" value="Riconferme ${S.annoStagione+1}" maxlength="50"></div>
+          <div class="btnrow"><button class="btn pri" id="btnApriF">Apri la finestra</button></div></div>`
+      : `<div class="card"><div class="ok-empty">Quando l'amministratore aprirà una finestra di riconferma, potrai fare le tue scelte da qui.</div></div>`}`;
+}
+
+function pannelloAdmin(){
+  const f = S.finestra;
+  const pronte = S.squadre.filter(s => haConsegnato(s.id)).length;
+  const righe = S.squadre.map(s => {
+    const ok = haConsegnato(s.id);
+    const c = consegne.find(x => x.squadra_id === s.id);
+    return `<tr><td>${esc(s.nome)}</td>
+      <td class="num">${s.posizione ? s.posizione+"º" : "—"}</td>
+      <td class="num">${nRiconferme(s)}</td>
+      <td>${ok ? `<span class="free">consegnata</span>` : `<span class="owner">in attesa</span>`}</td>
+      <td style="color:var(--tx-faint);font-size:12.5px">${ok && c ? new Date(c.inviata).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}) : ""}</td></tr>`;
+  }).join("");
+  return `<div class="thead"><div><h2>${esc(f.nome)}</h2>
+      <div class="pos">Finestra aperta il ${esc(f.apertaIl)} · le scelte restano segrete fino allo svelamento</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${pronte}/${S.squadre.length}</div><div class="l">Hanno consegnato</div></div>
+    </div></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th>Squadra</th><th class="num">Pos</th><th class="num">Disponibili</th><th>Stato</th><th>Ora</th></tr></thead>
+      <tbody>${righe}</tbody></table></div>
+    ${pronte < S.squadre.length ? `<div class="banner">Chi non consegna entro lo svelamento resta senza riconferme: tutta la sua prima squadra torna svincolata.</div>` : ""}
+    <div class="btnrow">
+      <button class="btn pri" id="btnSvela">Svela tutte le riconferme</button>
+      <button class="btn" id="btnChiudiF">Chiudi senza svelare</button></div>`;
+}
+
+function schedaManager(sq){
+  if(sq.id !== io?.squadra_id)
+    return `<div class="thead"><div><h2>Riconferme</h2>
+      <div class="pos">${esc(S.finestra.nome)}</div></div></div>
+      <div class="card"><div class="ok-empty">Le scelte delle altre squadre restano nascoste fino allo svelamento. Torna sulla tua squadra per fare le tue.</div></div>`;
+
   const lim = nRiconferme(sq);
-  const rosa = sq.rosa.filter(p => p.reparto === "prima")
-    .sort((a,b) => (b.prezzo||0) - (a.prezzo||0));
+  const rosa = sq.rosa.filter(p => p.reparto === "prima").sort((a,b) => (b.prezzo||0) - (a.prezzo||0));
   const scelti = rosa.filter(p => p.riconferma);
   const costo = scelti.reduce((n,p) => n + costoRiconferma(p), 0);
   const resta = S.regole.budget - costo;
+  const inviata = !!miaScelta;
+  const pronte = S.squadre.filter(s => haConsegnato(s.id)).length;
+
   const righe = rosa.map(p => {
     const ok = riconfermabile(p);
     const a = anniResidui(p);
     const motivo = ok ? "" : (fuoriSerieA(p) ? "Fuori dalla Serie A" : (a !== null && a <= 1) ? "Contratto esaurito" : "Non disponibile");
-    const uff = quotazioneUfficiale(p);
-    const q = quotazione(p);
-    const forzata = p.quotazione != null && p.quotazione !== uff;
-    // il costo è il maggiore fra prezzo pagato e quotazione: segnalo quale dei due comanda
+    const uff = quotazioneUfficiale(p), q = quotazione(p);
     const base = q != null && q > (p.prezzo || 0) ? "quotazione" : "prezzo d'acquisto";
     return `<tr>
       <td>${ok ? `<input type="checkbox" class="rc" data-pl="${p.id}" ${p.riconferma?"checked":""}>` : ""}</td>
@@ -809,35 +864,30 @@ function viewRiconferme(){
       <td>${esc(p.nome)}</td>
       <td style="color:var(--tx-faint)">${esc(p.club||"—")}</td>
       <td class="num">${p.prezzo ?? "—"}</td>
-      <td class="num"><input type="number" min="0" class="qt" data-pl="${p.id}" value="${q ?? ""}" placeholder="—"
-          title="${uff != null ? "Quotazione ufficiale: " + uff : "Non trovato nel listone"}"
-          style="width:64px${forzata ? ";border-color:var(--warn)" : ""}"></td>
+      <td class="num">${q ?? "—"}</td>
       <td class="num"><b>${ok ? costoRiconferma(p) : "—"}</b>${ok && q != null ? `<div class="owner">${base}</div>` : ""}</td>
       <td style="color:var(--tx-faint);font-size:12.5px">${motivo}</td></tr>`;
   }).join("");
-  const senzaQ = rosa.filter(p => quotazioneUfficiale(p) == null).length;
-  const forzate = rosa.filter(p => p.quotazione != null && p.quotazione !== quotazioneUfficiale(p)).length;
-  const avviso = !S.listone.length
-    ? `<div class="card" style="border-color:var(--warn)"><h3>Quotazioni non ancora caricate</h3>
-       <div class="hint" style="margin:0">Senza listone il costo coincide col prezzo d'acquisto. Importa le quotazioni ufficiali dalla scheda Listone e questa colonna si compila da sola.</div></div>`
-    : senzaQ
-    ? `<div class="card" style="border-color:var(--warn)"><h3>${senzaQ} giocatori senza quotazione</h3>
-       <div class="hint" style="margin:0">Non li trovo nel listone, di solito perché hanno lasciato la Serie A o perché il nome è scritto in modo diverso. Per quelli puoi digitare la quotazione a mano nella colonna.</div></div>`
-    : "";
-  return `<div class="thead"><div><h2>Riconferme</h2>
+
+  return `<div class="thead"><div><h2>${esc(S.finestra.nome)}</h2>
       <div class="pos">${esc(sq.nome)} · si riconferma al prezzo d'acquisto, o alla quotazione se più alta</div></div>
     <div class="stats">
-      <div class="stat"><div class="v" style="color:${scelti.length>lim?"var(--bad)":"inherit"}">${scelti.length}/${lim}</div><div class="l">Riconferme scelte</div></div>
-      <div class="stat"><div class="v">${costo}</div><div class="l">Costo totale</div></div>
-      <div class="stat"><div class="v" style="color:${resta<0?"var(--bad)":"var(--good)"}">${resta}</div><div class="l">Resta per l'asta</div></div>
+      <div class="stat"><div class="v" style="color:${scelti.length>lim?"var(--bad)":"inherit"}">${scelti.length}/${lim}</div><div class="l">Scelti</div></div>
+      <div class="stat"><div class="v">${costo}</div><div class="l">Costo</div></div>
+      <div class="stat"><div class="v" style="color:${resta<0?"var(--bad)":"var(--good)"}">${resta}</div><div class="l">Resterebbe</div></div>
+      <div class="stat"><div class="v">${pronte}/${S.squadre.length}</div><div class="l">Hanno consegnato</div></div>
     </div></div>
-    ${avviso}
+    <div class="banner">${inviata
+      ? "Scelta consegnata. Puoi ancora modificarla e reinviarla finché l'amministratore non svela."
+      : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
     <div class="card" style="padding:0;overflow:hidden">
       <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Club</th>
         <th class="num">Acquisto</th><th class="num">Quotazione</th><th class="num">Costo</th><th>Note</th></tr></thead>
       <tbody>${righe}</tbody></table></div>
-    <div class="btnrow"><button class="btn" id="btnClearRc">Azzera selezione</button>
-      ${forzate ? `<button class="btn" id="btnResetQt">Ripristina ${forzate} quotazioni dal listone</button>` : ""}</div>`;
+    <div class="btnrow">
+      <button class="btn pri" id="btnInviaScelta" ${(!scelti.length || scelti.length>lim || resta<0)?"disabled style='opacity:.45'":""}>
+        ${inviata ? "Aggiorna la mia scelta" : "Consegna le mie riconferme"}</button>
+      <button class="btn" id="btnClearRc">Azzera selezione</button></div>`;
 }
 
 function viewDraft(){
@@ -1360,7 +1410,7 @@ function proponiAllineamento(){
   const riga = (t, s) => `<div class="alert"><span class="ic" style="color:var(--${s})">•</span><span class="tx">${t}</span></div>`;
   document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
     <div class="mhead"><h3>Allinea le rose al listone</h3>
-      <div class="s">Confronto fra il listone appena importato e quanto registrato nelle rose.</div></div>
+      <div class="s">Confronto fra i club del listone appena importato e quelli registrati nelle rose.</div></div>
     <div class="mbody">
       <h3 style="font-size:15px;margin-bottom:6px">Cambi di ruolo · ${d.ruoli.length}</h3>
       <div class="hint" style="margin-bottom:8px">Cambiano reparto: se il nuovo reparto va oltre il limite te lo segnalo nella rosa.</div>
@@ -1368,16 +1418,16 @@ function proponiAllineamento(){
           riga(`<b>${esc(r.p.nome)}</b><div>${esc(r.sq.nome)} · ${RUOLO_NOME[r.da]} → <b style="color:var(--${r.a})">${RUOLO_NOME[r.a]}</b></div>`,"warn")).join("")
         : `<div class="ok-empty">Nessuno.</div>`}
       <h3 style="font-size:15px;margin:15px 0 6px">Cambi di squadra · ${d.cambi.length}</h3>
-      ${d.cambi.length ? d.cambi.slice(0,50).map(c =>
+      ${d.cambi.length ? d.cambi.slice(0,60).map(c =>
           riga(`<b>${esc(c.p.nome)}</b><div>${esc(c.sq.nome)} · ${esc(c.da)} → ${esc(c.a)}</div>`,"info")).join("")
         : `<div class="ok-empty">Nessuno.</div>`}
-      ${d.cambi.length > 50 ? `<div class="ok-empty">e altri ${d.cambi.length - 50}.</div>` : ""}
+      ${d.cambi.length > 60 ? `<div class="ok-empty">e altri ${d.cambi.length - 60}.</div>` : ""}
       <h3 style="font-size:15px;margin:15px 0 6px">Non più in Serie A · ${d.usciti.length}</h3>
       <div class="hint" style="margin-bottom:8px">Il regolamento libera subito lo slot, quindi vanno svincolati a mano dalla scheda del giocatore.</div>
-      ${d.usciti.length ? d.usciti.slice(0,50).map(u =>
+      ${d.usciti.length ? d.usciti.slice(0,60).map(u =>
           riga(`<b>${esc(u.p.nome)}</b><div>${esc(u.sq.nome)} · ${esc(u.p.club)}</div>`,"bad")).join("")
         : `<div class="ok-empty">Nessuno.</div>`}
-      ${d.usciti.length > 50 ? `<div class="ok-empty">e altri ${d.usciti.length - 50}.</div>` : ""}
+      ${d.usciti.length > 60 ? `<div class="ok-empty">e altri ${d.usciti.length - 60}.</div>` : ""}
     </div>
     <div class="mfoot"><button class="btn" id="mNo">Lascia com'è</button>
       <button class="btn pri" id="mSi">Applica ${d.cambi.length + d.usciti.length + d.ruoli.length} modifiche</button></div></div></div>`;
@@ -1463,10 +1513,120 @@ function mostraAccesso(errore){
   inp.focus();
 }
 
+/* ================= RICONFERME: motore ================= */
+// tiene i prescelti aggiornandone il prezzo, libera tutti gli altri,
+// e conserva una copia della rosa per poter tornare indietro
+function applicaRiconferme(sq, ids){
+  const prima = sq.rosa.filter(p => p.reparto === "prima");
+  const tenuti = prima.filter(p => ids.includes(p.id));
+  const err = verificaRiconferme(sq, tenuti);
+  if(err) return err;
+
+  sq.snapshotPre = JSON.parse(JSON.stringify({ rosa: sq.rosa, crediti: sq.crediti_residui,
+                                               svincolati: sq.svincolati || [] }));
+  const costo = tenuti.reduce((n,p) => n + costoRiconferma(p), 0);
+  const liberati = [];
+  sq.svincolati = sq.svincolati || [];
+
+  prima.forEach(p => {
+    if(ids.includes(p.id)){
+      p.prezzo = costoRiconferma(p);      // si riconferma al maggiore fra prezzo e quotazione
+      p.riconferma = false;
+      return;
+    }
+    // chi non passa lascia la rosa: se era riconfermabile e' una scelta,
+    // e in quel caso per riprenderlo servira offrire almeno un credito in piu
+    const scelta = riconfermabile(p);
+    liberati.push({ nome:p.nome, ruolo:p.ruolo, prezzo:p.prezzo, scelta });
+    if(scelta) sq.svincolati.push({ nome:p.nome, prezzo:p.prezzo, anno:S.annoStagione, motivo:"non riconfermato" });
+  });
+
+  sq.rosa = sq.rosa.filter(p => p.reparto !== "prima" || ids.includes(p.id));
+  sq.crediti_residui = S.regole.budget - costo;
+  sq.riconfermeChiuse = {
+    quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }),
+    anno: S.annoStagione, costo,
+    tenuti: tenuti.map(p => ({ nome:p.nome, ruolo:p.ruolo, prezzo:p.prezzo })),
+    liberati
+  };
+  return null;
+}
+
+function verificaRiconferme(sq, tenuti){
+  const lim = nRiconferme(sq);
+  if(sq.riconfermeChiuse) return "Le riconferme di questa squadra sono già state applicate";
+  if(tenuti.length > lim) return `Puoi riconfermare al massimo ${lim} giocatori, ne hai scelti ${tenuti.length}`;
+  const nonAmmessi = tenuti.filter(p => !riconfermabile(p));
+  if(nonAmmessi.length) return `${nonAmmessi[0].nome} non è riconfermabile`;
+  const costo = tenuti.reduce((n,p) => n + costoRiconferma(p), 0);
+  if(costo > S.regole.budget) return `Il costo è ${costo}, oltre i ${S.regole.budget} crediti disponibili`;
+  return null;
+}
+
+function annullaRiconferme(sq){
+  if(!sq.riconfermeChiuse || !sq.snapshotPre) return "Non c'è nessuna riconferma da annullare";
+  sq.rosa = sq.snapshotPre.rosa;
+  sq.crediti_residui = sq.snapshotPre.crediti;
+  sq.svincolati = sq.snapshotPre.svincolati;
+  delete sq.snapshotPre;
+  delete sq.riconfermeChiuse;
+  return null;
+}
+
+/* ================= NOME SQUADRA ================= */
+function apriNome(){
+  const sq = team();
+  const proponi = !sonoAdmin();
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(420px,100%)">
+    <div class="mhead"><h3>Nome della squadra</h3>
+      <div class="s">${proponi ? "L'amministratore riceverà la richiesta e la confermerà." : "La modifica è immediata per tutti."}</div></div>
+    <div class="mbody">
+      <div class="f"><label>Come vuoi chiamarti</label>
+        <input id="nNome" value="${esc(sq.nome)}" maxlength="40" autocomplete="off"></div>
+      <div class="hint" style="margin:12px 0 0">Puoi cambiarlo quante volte vuoi: rose, contratti, picks e scambi restano agganciati alla squadra, non al nome.</div>
+    </div>
+    <div class="mfoot"><button class="btn" id="nNo">Annulla</button>
+      <button class="btn pri" id="nSi">${proponi ? "Invia richiesta" : "Salva"}</button></div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("nNo").onclick = close;
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  document.getElementById("nSi").onclick = async () => {
+    const nuovo = document.getElementById("nNome").value.trim().replace(/\s+/g," ");
+    const err = validaNome(nuovo, sq.id);
+    if(err){ toast(err); return; }
+    if(proponi){
+      if(sq.id !== io.squadra_id){ toast("Puoi rinominare solo la tua squadra"); return; }
+      if(await inviaAzione("nome", { nome: nuovo })){ close(); toast("Richiesta inviata all'amministratore"); }
+      return;
+    }
+    sq.nome = nuovo; save(); close(); render(); toast("Nome aggiornato");
+  };
+  document.getElementById("nNome").focus();
+}
+
+function validaNome(nuovo, idSquadra){
+  if(!nuovo) return "Il nome non può restare vuoto";
+  if(nuovo.length < 2) return "Serve un nome un po' più lungo";
+  if(S.squadre.some(s => s.id !== idSquadra && norm(s.nome) === norm(nuovo)))
+    return "C'è già una squadra con questo nome";
+  return null;
+}
+
 /* ================= RICHIESTE (amministratore) ================= */
 function descriviAzione(a){
   const sq = S.squadre.find(s => s.id === a.squadra_id);
   const c = a.contenuto || {};
+  if(a.tipo === "riconferme"){
+    const n = (c.ids || []).length;
+    const costo = (c.ids || []).reduce((t,id) => {
+      const p = (sq?.rosa || []).find(x => x.id === id);
+      return t + (p ? costoRiconferma(p) : 0);
+    }, 0);
+    return `${esc(sq?.nome || a.squadra_id)} riconferma <b>${n}</b> giocatori per <b>${costo}</b> crediti`;
+  }
+  if(a.tipo === "annulla"){
+    return `${esc(sq?.nome || a.squadra_id)} chiede di annullare le riconferme già applicate`;
+  }
   if(a.tipo === "nome"){
     return `${esc(sq?.nome || a.squadra_id)} vuole chiamarsi <b>${esc(c.nome || "?")}</b>`;
   }
@@ -1486,9 +1646,12 @@ function descriviAzione(a){
 function viewRichieste(){
   if(!sonoAdmin()) return `<div class="thead"><div><h2>Richieste</h2></div></div>
     <div class="card"><div class="ok-empty">Sezione riservata all'amministratore.</div></div>`;
+  const etichetta = { draft:"Scelta al draft", nome:"Cambio di nome",
+    riconferme:"Riconferme", annulla:"Annullamento riconferme" };
+  const icona = { draft:"◆", nome:"✎", riconferme:"★", annulla:"↺" };
   const righe = azioni.map(a => `<div class="alert">
-      <span class="ic" style="color:var(--info)">${a.tipo === "draft" ? "◆" : a.tipo === "nome" ? "✎" : "⇄"}</span>
-      <span class="tx"><b>${a.tipo === "draft" ? "Scelta al draft" : a.tipo === "nome" ? "Cambio di nome" : "Proposta di scambio"}</b>
+      <span class="ic" style="color:var(--info)">${icona[a.tipo] || "⇄"}</span>
+      <span class="tx"><b>${etichetta[a.tipo] || "Proposta di scambio"}</b>
         <div style="color:var(--tx-dim);margin:3px 0 6px">${descriviAzione(a)}</div>
         <div style="font-size:12px">${new Date(a.creata).toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"})}</div>
         <div class="btnrow" style="margin-top:8px">
@@ -1513,8 +1676,17 @@ async function decidi(id, esito, motivo){
 async function applicaAzione(id){
   const a = azioni.find(x => x.id === id);
   if(!a) return;
-  if(a.tipo === "nome"){
-    return `${esc(sq?.nome || a.squadra_id)} vuole chiamarsi <b>${esc(c.nome || "?")}</b>`;
+  if(a.tipo === "riconferme" || a.tipo === "annulla"){
+    const sq = S.squadre.find(s => s.id === a.squadra_id);
+    if(!sq){ toast("Squadra non trovata"); return; }
+    const e = a.tipo === "riconferme"
+      ? applicaRiconferme(sq, a.contenuto.ids || [])
+      : annullaRiconferme(sq);
+    if(e){ toast(e); await decidi(id, "rifiutata", e); render(); return; }
+    await decidi(id, "accettata");
+    save(); render();
+    toast(a.tipo === "riconferme" ? "Riconferme applicate" : "Riconferme annullate");
+    return;
   }
   if(a.tipo === "nome"){
     const sq = S.squadre.find(s => s.id === a.squadra_id);
@@ -1586,43 +1758,102 @@ async function proponiScambio(){
   }
 }
 
-/* ================= NOME SQUADRA ================= */
-function apriNome(){
-  const sq = team();
-  const proponi = !sonoAdmin();
-  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(420px,100%)">
-    <div class="mhead"><h3>Nome della squadra</h3>
-      <div class="s">${proponi ? "L'amministratore riceverà la richiesta e la confermerà." : "La modifica è immediata per tutti."}</div></div>
-    <div class="mbody">
-      <div class="f"><label>Come vuoi chiamarti</label>
-        <input id="nNome" value="${esc(sq.nome)}" maxlength="40" autocomplete="off"></div>
-      <div class="hint" style="margin:12px 0 0">Puoi cambiarlo quante volte vuoi: rose, contratti, picks e scambi restano agganciati alla squadra, non al nome.</div>
-    </div>
-    <div class="mfoot"><button class="btn" id="nNo">Annulla</button>
-      <button class="btn pri" id="nSi">${proponi ? "Invia richiesta" : "Salva"}</button></div></div></div>`;
-  const close = () => document.getElementById("modalHost").innerHTML = "";
-  document.getElementById("nNo").onclick = close;
-  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
-  document.getElementById("nSi").onclick = async () => {
-    const nuovo = document.getElementById("nNome").value.trim().replace(/\s+/g," ");
-    const err = validaNome(nuovo, sq.id);
-    if(err){ toast(err); return; }
-    if(proponi){
-      if(sq.id !== io.squadra_id){ toast("Puoi rinominare solo la tua squadra"); return; }
-      if(await inviaAzione("nome", { nome: nuovo })){ close(); toast("Richiesta inviata all'amministratore"); }
-      return;
-    }
-    sq.nome = nuovo; save(); close(); render(); toast("Nome aggiornato");
-  };
-  document.getElementById("nNome").focus();
+function viewRiconfermeChiuse(sq){
+  const r = sq.riconfermeChiuse;
+  const mio = sq.id === io?.squadra_id;
+  const inAttesa = (azioni||[]).some(a => a.tipo === "annulla" && a.squadra_id === sq.id);
+  const esiti = S.finestra?.esiti || [];
+  const riga = (p, cls) => `<tr class="${cls||""}"><td style="color:var(--${p.ruolo})">${p.ruolo}</td>
+    <td>${esc(p.nome)}</td><td class="num">${p.prezzo ?? "—"}</td>
+    <td style="color:var(--tx-faint);font-size:12.5px">${cls ? (p.scelta ? "non riconfermato per scelta" : "contratto esaurito") : ""}</td></tr>`;
+  return `<div class="thead"><div><h2>Riconferme</h2>
+      <div class="pos">${esc(sq.nome)} · operazione conclusa il ${esc(r.quando)}</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${r.tenuti.length}</div><div class="l">Riconfermati</div></div>
+      <div class="stat"><div class="v">${r.costo}</div><div class="l">Crediti spesi</div></div>
+      <div class="stat"><div class="v" style="color:var(--good)">${sq.crediti_residui}</div><div class="l">Restano per l'asta</div></div>
+      <div class="stat"><div class="v">${r.liberati.length}</div><div class="l">Liberati</div></div>
+    </div></div>
+    ${inAttesa ? `<div class="banner">Richiesta di annullamento inviata, in attesa che l'amministratore la valuti.</div>` : ""}
+    ${esiti.length ? `<div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Come è andata in tutta la lega</span><span class="c">${esc(S.finestra.nome)}</span></div>
+      <table><thead><tr><th>Squadra</th><th class="num">Riconfermati</th><th class="num">Spesi</th><th>Nota</th></tr></thead>
+      <tbody>${esiti.map(e => `<tr class="${e.id===sq.id?"me":""}"><td>${esc(e.squadra)}</td>
+        <td class="num">${e.tenuti}</td><td class="num">${e.costo}</td>
+        <td style="color:var(--tx-faint);font-size:12.5px">${e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Rimasti in rosa</span><span class="c">${r.tenuti.length}</span></div>
+      <table><tbody>${r.tenuti.map(p => riga(p)).join("")}</tbody></table></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Tornati svincolati</span><span class="c">${r.liberati.length}</span></div>
+      <table><tbody>${r.liberati.map(p => riga(p,"lib")).join("")}</tbody></table></div>
+    <div class="hint" style="max-width:70ch">Chi non è stato riconfermato per scelta torna disponibile per tutti, ma per riprenderlo all'asta dovrai offrire almeno un credito in più del prezzo indicato. Per chi aveva il contratto esaurito quel vincolo non vale.</div>
+    <div class="btnrow">
+      ${sonoAdmin() ? `<button class="btn dgr" id="btnAnnullaF">Annulla lo svelamento</button>
+          <button class="btn" id="btnNuovaF">Apri una nuova finestra</button>`
+        : mio && !inAttesa ? `<button class="btn" id="btnChiediAnnullo">Richiesta di annullamento</button>` : ""}
+    </div>`;
 }
 
-function validaNome(nuovo, idSquadra){
-  if(!nuovo) return "Il nome non può restare vuoto";
-  if(nuovo.length < 2) return "Serve un nome un po' più lungo";
-  if(S.squadre.some(s => s.id !== idSquadra && norm(s.nome) === norm(nuovo)))
-    return "C'è già una squadra con questo nome";
-  return null;
+/* ================= FINESTRE DI RICONFERMA ================= */
+let consegne = [];          // chi ha gia inviato, senza contenuti
+let miaScelta = null;       // la propria scelta, riletta dal database
+
+const finestra = () => S.finestra || null;
+const finestraAperta = () => !!(S.finestra && S.finestra.stato === "aperta");
+
+async function caricaConsegne(){
+  if(!collegato || !finestraAperta()) { consegne = []; return; }
+  const { data } = await db.rpc("stato_scelte", { p_finestra: S.finestra.id });
+  consegne = data || [];
+}
+async function caricaMiaScelta(){
+  miaScelta = null;
+  if(!collegato || !finestraAperta() || sonoAdmin()) return;
+  const { data } = await db.rpc("mia_scelta", { p_codice: codice, p_finestra: S.finestra.id });
+  miaScelta = data || null;
+}
+const haConsegnato = id => consegne.some(c => c.squadra_id === id);
+
+function apriFinestra(nome){
+  S.finestra = { id: "f" + Date.now(), nome, stato: "aperta",
+    apertaIl: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
+  S.squadre.forEach(sq => { delete sq.riconfermeChiuse; delete sq.snapshotPre; });
+  save(); render();
+}
+
+// lo svelamento applica tutte le scelte nello stesso istante:
+// da qui in poi le rose aggiornate sono visibili a chiunque
+async function svelaFinestra(){
+  const { data, error } = await db.rpc("leggi_scelte",
+    { p_codice: codice, p_finestra: S.finestra.id });
+  if(error){ toast("Non riesco a leggere le scelte: " + error.message); return; }
+  const scelte = data || [];
+  const esiti = [];
+  S.squadre.forEach(sq => {
+    const s = scelte.find(x => x.squadra_id === sq.id);
+    const ids = s ? (s.contenuto.ids || []) : [];
+    const err = applicaRiconferme(sq, ids);
+    esiti.push({ squadra: sq.nome, id: sq.id, consegnata: !!s,
+                 tenuti: err ? 0 : sq.riconfermeChiuse.tenuti.length,
+                 costo: err ? 0 : sq.riconfermeChiuse.costo, errore: err });
+  });
+  S.finestra.stato = "svelata";
+  S.finestra.svelataIl = new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" });
+  S.finestra.esiti = esiti;
+  S.storicoFinestre = S.storicoFinestre || [];
+  S.storicoFinestre.push({ ...S.finestra });
+  save(); render();
+  await db.rpc("azzera_scelte", { p_codice: codice, p_finestra: S.finestra.id });
+  await caricaConsegne();
+  toast("Riconferme svelate per tutte le squadre");
+}
+
+function annullaFinestra(){
+  S.squadre.forEach(sq => { if(sq.riconfermeChiuse) annullaRiconferme(sq); });
+  if(S.finestra) S.finestra.stato = "aperta";
+  save(); render();
+  toast("Svelamento annullato, la finestra è di nuovo aperta");
 }
 
 function viewControlli(){
@@ -1708,6 +1939,50 @@ function bindView(){
     p.quotazione = (v === null || v === quotazioneUfficiale(p)) ? null : v;
     save(); render();
   });
+  const af = document.getElementById("btnApriF");
+  if(af) af.onclick = () => {
+    const nome = (document.getElementById("fNome").value || "").trim() || "Riconferme";
+    conferma(`Aprire "${nome}"?`,
+      "Ogni squadra potra scegliere in segreto. Le riconferme gia applicate in precedenza vengono azzerate e le rose restano come sono finche non sveli.",
+      () => { document.getElementById("modalHost").innerHTML = ""; apriFinestra(nome); toast("Finestra aperta"); });
+  };
+  const inv = document.getElementById("btnInviaScelta");
+  if(inv) inv.onclick = async () => {
+    const sq = team();
+    const ids = sq.rosa.filter(p => p.reparto === "prima" && p.riconferma).map(p => p.id);
+    const e = verificaRiconferme(sq, sq.rosa.filter(p => ids.includes(p.id)));
+    if(e){ toast(e); return; }
+    const { error } = await db.rpc("invia_scelta",
+      { p_codice: codice, p_finestra: S.finestra.id, p_contenuto: { ids } });
+    if(error){ toast("Invio non riuscito: " + error.message); return; }
+    await caricaMiaScelta(); await caricaConsegne(); render();
+    toast("Scelta consegnata, resta segreta fino allo svelamento");
+  };
+  const sv = document.getElementById("btnSvela");
+  if(sv) sv.onclick = () => {
+    const mancano = S.squadre.filter(s => !haConsegnato(s.id));
+    conferma("Svelare tutte le riconferme?",
+      (mancano.length ? `${mancano.length} squadre non hanno consegnato e resteranno senza riconferme. ` : "")
+      + "Le rose si aggiornano per tutti nello stesso momento e da li in poi nessuno puo piu modificare.",
+      async () => { document.getElementById("modalHost").innerHTML = ""; await svelaFinestra(); });
+  };
+  const cf = document.getElementById("btnChiudiF");
+  if(cf) cf.onclick = () => conferma("Chiudere senza svelare?",
+    "La finestra si chiude e le scelte consegnate vengono scartate. Le rose restano come sono.",
+    async () => { document.getElementById("modalHost").innerHTML = "";
+      if(collegato) await db.rpc("azzera_scelte", { p_codice: codice, p_finestra: S.finestra.id });
+      S.finestra = null; consegne = []; miaScelta = null; save(); render(); toast("Finestra chiusa"); });
+  const anf = document.getElementById("btnAnnullaF");
+  if(anf) anf.onclick = () => conferma("Annullare lo svelamento?",
+    "Tutte le rose tornano com'erano prima, crediti compresi, e la finestra si riapre per rifare le scelte.",
+    () => { document.getElementById("modalHost").innerHTML = ""; annullaFinestra(); });
+  const nf = document.getElementById("btnNuovaF");
+  if(nf) nf.onclick = () => { S.finestra = null; save(); render(); };
+  const ca = document.getElementById("btnChiediAnnullo");
+  if(ca) ca.onclick = async () => {
+    if(await inviaAzione("annulla", {})) toast("Richiesta inviata all'amministratore");
+    render();
+  };
   const rq = document.getElementById("btnResetQt");
   if(rq) rq.onclick = () => {
     team().rosa.forEach(p => p.quotazione = null); save(); render();
@@ -2052,7 +2327,7 @@ async function avvia(){
       toast("L'amministratore non ha ancora pubblicato la lega");
     }
   }catch(e){ toast("Collegamento non riuscito: " + (e.message||e)); }
-  if(collegato){ await caricaAzioni(); ascolta(); }
+  if(collegato){ await caricaAzioni(); await caricaConsegne(); await caricaMiaScelta(); ascolta(); }
   if(!sonoAdmin()) tab = "rosa";
   render();
   if(sonoAdmin() && datiVecchi()) proponiAggiornamento();
