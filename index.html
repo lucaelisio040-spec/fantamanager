@@ -777,9 +777,11 @@ function viewRosa(){
   const right = legendaFasce(S.annoStagione)
               + blockRows("Primavera", primavera(sq), null)
               + blockRows("Fuori rosa", fuoriRosa(sq), null)
-              + `<div class="card"><h3>Aggiungi giocatore</h3>
-                 <div class="hint">Usalo per un acquisto all'asta, una scelta al draft o un arrivo in scambio.</div>
-                 <button class="btn pri" id="btnAdd">Aggiungi alla rosa</button></div>`;
+              + ((sonoAdmin() || sq.id === io?.squadra_id) ? `<div class="card"><h3>${sonoAdmin() ? "Aggiungi giocatore" : "Chiedi un inserimento"}</h3>
+                 <div class="hint">${sonoAdmin()
+                   ? "Usalo per un acquisto all'asta, una scelta al draft o un arrivo in scambio."
+                   : "Compila la scheda e la richiesta arriva all'amministratore, che la applica dopo averla controllata."}</div>
+                 <button class="btn pri" id="btnAdd">${sonoAdmin() ? "Aggiungi alla rosa" : "Invia richiesta"}</button></div>` : "");
   return `<div class="thead">
       <div><h2>${esc(sq.nome)}${(sonoAdmin() || sq.id === io?.squadra_id) ? ` <button class="matita" id="btnNome" title="Cambia il nome della squadra">✎</button>` : ""}</h2>
         <div class="pos">${sq.posizione ? sq.posizione+"º posto la scorsa stagione" : "Posizione non impostata"} · ${nRiconferme(sq)} riconferme disponibili</div></div>
@@ -1552,6 +1554,29 @@ function applicaRiconferme(sq, ids){
   return null;
 }
 
+// un inserimento non deve sfondare il reparto o la capienza del vivaio
+function verificaAggiunta(sq, c){
+  if(!c || !c.nome) return "Manca il nome del giocatore";
+  if(c.reparto === "prima"){
+    const lim = S.regole.rosa[c.ruolo];
+    if(lim == null) return "Ruolo non valido";
+    if(reparto(sq, c.ruolo).length >= lim)
+      return `${RUOLO_NOME[c.ruolo]} già al completo: ${lim} su ${lim}`;
+  } else {
+    if(occupatiVivaio(sq) >= S.regole.slotPrimavera)
+      return `Vivaio già pieno: ${S.regole.slotPrimavera} slot su ${S.regole.slotPrimavera}`;
+    if(c.reparto === "primavera" && c.fascia){
+      const chiave = (c.fascia === "U21" || c.fascia === "U20") ? "U21/U20" : c.fascia;
+      const lim = S.regole.slotFascia[chiave];
+      if(lim != null && contaFascia(sq, chiave) >= lim)
+        return `Fascia ${chiave} già al completo: ${lim} su ${lim}`;
+    }
+  }
+  if((c.prezzo ?? 0) > sq.crediti_residui)
+    return `${sq.nome} ha ${sq.crediti_residui} crediti, non bastano per ${c.prezzo}`;
+  return null;
+}
+
 function verificaRiconferme(sq, tenuti){
   const lim = nRiconferme(sq);
   if(sq.riconfermeChiuse) return "Le riconferme di questa squadra sono già state applicate";
@@ -1616,6 +1641,11 @@ function validaNome(nuovo, idSquadra){
 function descriviAzione(a){
   const sq = S.squadre.find(s => s.id === a.squadra_id);
   const c = a.contenuto || {};
+  if(a.tipo === "aggiunta"){
+    const dove = c.reparto === "prima" ? "prima squadra" : c.reparto === "primavera" ? `vivaio ${c.fascia||""}`.trim() : "fuori rosa";
+    return `${esc(sq?.nome || a.squadra_id)} vuole inserire <b>${esc(c.nome||"?")}</b> `
+         + `(${c.ruolo||"?"}${c.club?", "+esc(c.club):""}) in ${dove} per <b>${c.prezzo ?? 0}</b> crediti`;
+  }
   if(a.tipo === "riconferme"){
     const n = (c.ids || []).length;
     const costo = (c.ids || []).reduce((t,id) => {
@@ -1647,8 +1677,8 @@ function viewRichieste(){
   if(!sonoAdmin()) return `<div class="thead"><div><h2>Richieste</h2></div></div>
     <div class="card"><div class="ok-empty">Sezione riservata all'amministratore.</div></div>`;
   const etichetta = { draft:"Scelta al draft", nome:"Cambio di nome",
-    riconferme:"Riconferme", annulla:"Annullamento riconferme" };
-  const icona = { draft:"◆", nome:"✎", riconferme:"★", annulla:"↺" };
+    riconferme:"Riconferme", annulla:"Annullamento riconferme", aggiunta:"Inserimento in rosa" };
+  const icona = { draft:"◆", nome:"✎", riconferme:"★", annulla:"↺", aggiunta:"+" };
   const righe = azioni.map(a => `<div class="alert">
       <span class="ic" style="color:var(--info)">${icona[a.tipo] || "⇄"}</span>
       <span class="tx"><b>${etichetta[a.tipo] || "Proposta di scambio"}</b>
@@ -1676,6 +1706,20 @@ async function decidi(id, esito, motivo){
 async function applicaAzione(id){
   const a = azioni.find(x => x.id === id);
   if(!a) return;
+  if(a.tipo === "aggiunta"){
+    const sq = S.squadre.find(s => s.id === a.squadra_id);
+    if(!sq){ toast("Squadra non trovata"); return; }
+    const c = a.contenuto;
+    const e = verificaAggiunta(sq, c);
+    if(e){ toast(e); await decidi(id, "rifiutata", e); render(); return; }
+    sq.rosa.push({ id:uid(), nome:c.nome, ruolo:c.ruolo, club:c.club || "",
+      prezzo:c.prezzo ?? 0, nato:c.nato ?? null,
+      scadenza:c.scadenza || `${S.annoStagione + S.regole.durataPrima}-09-01`,
+      reparto:c.reparto || "prima", fascia:c.reparto === "primavera" ? c.fascia : null });
+    await decidi(id, "accettata");
+    save(); render(); toast(`${c.nome} inserito in ${sq.nome}`);
+    return;
+  }
   if(a.tipo === "riconferme" || a.tipo === "annulla"){
     const sq = S.squadre.find(s => s.id === a.squadra_id);
     if(!sq){ toast("Squadra non trovata"); return; }
@@ -2112,11 +2156,15 @@ function openPlayer(id){
     scadenza:`${S.annoStagione + S.regole.durataPrima}-09-01`, reparto:"prima", fascia:null, _nuovo:true };
   const isNew = !!p._nuovo;
   const a = anniResidui(p);
+  // un manager puo solo chiedere: le modifiche alle rose le applica l'amministratore
+  const soloLettura = !sonoAdmin() && !isNew;
+  const miaSquadraQuesta = sq.id === io?.squadra_id;
   const html = `<div class="scrim" id="scrim"><div class="modal">
     <div class="mhead"><h3>${isNew ? "Nuovo giocatore" : esc(p.nome)}</h3>
       <div class="s">${esc(sq.nome)}${!isNew && a !== null ? " · " + (a > 0 ? a + " stagioni residue" : "contratto scaduto") : ""}</div></div>
     <div class="mbody">
-      <div class="cerca">
+      ${soloLettura ? `<div class="banner">Stai guardando la rosa: le modifiche ai giocatori le applica l'amministratore. Per uno scambio usa la scheda Scambi.</div>` : ""}
+      <div class="cerca" ${soloLettura?'style="display:none"':""}>
         <label>Cerca nel listone</label>
         <input id="mCerca" placeholder="${S.listone.length ? "scrivi il cognome" : "nessun listone caricato"}"
           autocomplete="off" ${S.listone.length ? "" : "disabled"}>
@@ -2137,16 +2185,16 @@ function openPlayer(id){
         <div class="f" id="wrapFascia" style="${p.reparto==="primavera"?"":"display:none"}"><label>Fascia</label>
           <select id="mFascia"><option value="">—</option>${FASCE.map(f => `<option ${p.fascia===f?"selected":""}>${f}</option>`).join("")}</select></div>
       </div>
-      ${!isNew ? `<div class="btnrow">
+      ${!isNew && sonoAdmin() ? `<div class="btnrow">
         ${p.reparto === "primavera" || p.reparto === "fuori_rosa"
           ? `<button class="btn" id="mPromuovi">Promuovi in prima squadra</button>` : ""}
         ${p.reparto === "prima" ? `<button class="btn" id="mRetrocedi">Manda in primavera come fuori rosa</button>` : ""}
       </div>` : ""}
     </div>
     <div class="mfoot">
-      ${!isNew ? `<button class="btn dgr" id="mSvincola">Svincola</button>` : ""}
-      <button class="btn" id="mAnnulla">Annulla</button>
-      <button class="btn pri" id="mSalva">${isNew ? "Aggiungi" : "Salva"}</button>
+      ${!isNew && sonoAdmin() ? `<button class="btn dgr" id="mSvincola">Svincola</button>` : ""}
+      <button class="btn" id="mAnnulla">${soloLettura ? "Chiudi" : "Annulla"}</button>
+      ${soloLettura ? "" : `<button class="btn pri" id="mSalva">${isNew ? (sonoAdmin() ? "Aggiungi" : "Invia richiesta") : "Salva"}</button>`}
     </div></div></div>`;
   document.getElementById("modalHost").innerHTML = html;
 
@@ -2186,9 +2234,25 @@ function openPlayer(id){
   document.getElementById("mRep").onchange = e => {
     document.getElementById("wrapFascia").style.display = e.target.value === "primavera" ? "" : "none";
   };
-  document.getElementById("mSalva").onclick = () => {
+  const salva = document.getElementById("mSalva");
+  if(salva) salva.onclick = async () => {
     const nome = document.getElementById("mNome").value.trim();
     if(!nome){ toast("Serve il nome del giocatore"); return; }
+    if(!sonoAdmin()){
+      if(!miaSquadraQuesta){ toast("Puoi chiedere inserimenti solo per la tua squadra"); return; }
+      const rep = document.getElementById("mRep").value;
+      const ok = await inviaAzione("aggiunta", {
+        nome, ruolo: document.getElementById("mRuolo").value,
+        club: document.getElementById("mClub").value.trim(),
+        prezzo: +document.getElementById("mPrezzo").value || 0,
+        scadenza: document.getElementById("mScad").value || null,
+        nato: document.getElementById("mNato").value ? +document.getElementById("mNato").value : null,
+        reparto: rep,
+        fascia: rep === "primavera" ? (document.getElementById("mFascia").value || null) : null
+      });
+      if(ok){ close(); toast("Richiesta inviata all'amministratore"); }
+      return;
+    }
     p.nome = nome;
     p.ruolo = document.getElementById("mRuolo").value;
     p.club = document.getElementById("mClub").value.trim();
