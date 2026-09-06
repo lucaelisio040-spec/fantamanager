@@ -1,0 +1,30 @@
+{
+  "name": "Fantamanager",
+  "short_name": "Fantamanager",
+  "description": "Gestione rose, contratti, scambi e draft della lega manageriale.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#101720",
+  "theme_color": "#0F2350",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "icona-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icona-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icona-mascherabile-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

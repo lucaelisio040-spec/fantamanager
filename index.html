@@ -1,5 +1,13 @@
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fantamanager</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F2350">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Fantamanager">
+<link rel="apple-touch-icon" href="icona-apple-180.png">
+<link rel="icon" href="icona-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -331,6 +339,7 @@ tr:last-child td{border-bottom:none}
       <button id="btnExport">Esporta dati</button>
       <button id="btnImport">Importa</button>
       <button id="btnReset">Ripristina</button>
+      <button id="btnInstalla" class="hidden">Installa l'app</button>
       <input type="file" id="fileIn" accept="application/json" class="hidden">
     </div>
   </aside>
@@ -2383,6 +2392,28 @@ document.getElementById("btnReset").onclick = () => {
     save(); render(); toast("Dati iniziali ripristinati");
   });
 };
+
+/* ---- app installabile ---- */
+let invitoInstalla = null;
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();                       // l'invito lo mostro io, al momento giusto
+  invitoInstalla = e;
+  document.getElementById("btnInstalla").classList.remove("hidden");
+});
+document.getElementById("btnInstalla").onclick = async () => {
+  if(!invitoInstalla) return;
+  invitoInstalla.prompt();
+  await invitoInstalla.userChoice;
+  invitoInstalla = null;
+  document.getElementById("btnInstalla").classList.add("hidden");
+};
+window.addEventListener("appinstalled", () => {
+  document.getElementById("btnInstalla").classList.add("hidden");
+  toast("Fantamanager installata");
+});
 
 /* ---- avvio ---- */
 async function avvia(){
