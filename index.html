@@ -272,54 +272,76 @@ tr:last-child td{border-bottom:none}
 
 .banner{border:1px solid var(--line);border-left:3px solid var(--info);border-radius:0 6px 6px 0;
   background:var(--panel);padding:10px 14px;margin:14px 0;font-size:13px;color:var(--tx-dim)}
+.mtop{display:none}
+.scrimRail{display:none}
 
-/* ---------- telefono ---------- */
-@media(max-width:760px){
-  .app{grid-template-columns:1fr;height:auto;overflow:visible}
-  .rail{border-right:none;border-bottom:1px solid var(--line)}
-  .brand{padding:10px 14px 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  .brand h1{font-size:19px}
-  .brand .sub{display:none}
-  .season{margin-top:0}
-  .railhead{display:none}
-  /* le squadre diventano una fila scorrevole invece di una colonna */
-  .railscroll{display:flex;flex:none;gap:6px;padding:7px 12px;overflow-x:auto;overflow-y:hidden}
-  .tbtn{width:auto;flex:none;min-width:138px;border:1px solid var(--line);border-radius:6px;padding:6px 11px}
-  .tbtn.on{border-color:var(--info)}
-  .tbtn .nm{font-size:14px}
-  .tbtn .mt{font-size:10.5px;gap:7px}
-  .tbtn .dot{top:8px;right:8px}
-  .sync{padding:6px 14px}
-  .railfoot{padding:7px 11px;gap:6px}
-  .railfoot button{font-size:11.5px;padding:4px 9px}
+/* ---------- telefono: menu a scomparsa ---------- */
+@media(max-width:820px){
+  html,body{overflow-x:hidden;max-width:100%}
+  body{font-size:14.5px}
+  .app{display:block;height:auto;overflow:visible}
 
-  .main{overflow:visible;padding:0 14px 50px}
-  .tabs{overflow-x:auto;white-space:nowrap;padding-top:9px}
-  .tab{flex:none;padding:6px 12px 8px;font-size:12.5px}
+  /* barra fissa con il pulsante del menu */
+  .mtop{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:60;
+    height:50px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .mtop button{width:36px;height:36px;flex:none;border:1px solid var(--line);border-radius:7px;
+    font-size:17px;line-height:1;color:var(--tx-dim);display:grid;place-items:center}
+  .mtop button:active{background:var(--raised)}
+  .mtop .mt-t{font-family:'Barlow Condensed';font-size:17px;font-weight:600;text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+  .mtop .mt-s{font-size:12px;color:var(--tx-faint);flex:none}
 
-  .thead{padding:16px 0 12px;gap:14px}
-  .thead h2{font-size:26px}
+  /* la barra delle squadre esce da sinistra, come sul computer ma richiudibile */
+  .rail{position:fixed;top:0;left:0;bottom:0;width:80vw;max-width:290px;z-index:70;
+    transform:translateX(-100%);border-right:1px solid var(--line)}
+  body.menu .rail{transform:none}
+  .scrimRail{display:block;position:fixed;inset:0;z-index:65;background:rgba(6,10,15,.66);
+    opacity:0;pointer-events:none}
+  body.menu .scrimRail{opacity:1;pointer-events:auto}
+  @media(prefers-reduced-motion:no-preference){
+    .rail{transition:transform .22s ease}
+    .scrimRail{transition:opacity .22s ease}
+  }
+
+  .main{overflow:visible;padding:0 13px 50px}
+  .tabs{position:sticky;top:50px;overflow-x:auto;white-space:nowrap;padding-top:9px}
+  .tab{flex:none;padding:7px 13px 9px;font-size:13px}
+
+  .thead{padding:15px 0 12px;gap:14px}
+  .thead h2{font-size:25px}
   .stats{gap:18px}
   .stat .v{font-size:22px}
 
-  /* le tabelle larghe scorrono in orizzontale dentro la propria scheda */
+  /* niente zoom: le tabelle larghe scorrono dentro la propria scheda */
   .card:has(table){overflow-x:auto!important}
-  .card table,.block table{min-width:520px}
+  .card table,.block table{min-width:500px}
   .card{padding:14px}
-
-  .row{grid-template-columns:17px 1fr 54px 50px 20px;gap:7px;padding:6px 10px}
-  .row .nm span{display:none}
-  .pcell{grid-template-columns:30px 1fr auto;gap:9px}
-  .pcell .via{font-size:11px}
+  .cols{grid-template-columns:1fr}
+  .trade{grid-template-columns:1fr}
+  .tradearrow{display:none}
   .pkgrid{grid-template-columns:1fr}
+  .g4,.g2{grid-template-columns:1fr}
+
+  .row{grid-template-columns:18px 1fr 56px 50px 20px;gap:7px;padding:7px 11px}
+  .row .nm span{display:none}
+  .pcell{grid-template-columns:32px 1fr auto;gap:9px}
+  .pcell .via{font-size:11px}
   .legenda{gap:10px;font-size:12px}
   .legenda .lf.note{margin-left:0;width:100%}
-  .toolbar input[type=search]{min-width:0;flex:1}
+  .toolbar{gap:7px}
+  .toolbar input[type=search],.toolbar select{min-width:0;flex:1 1 40%}
   .gatebox{padding:22px 20px}
+  .modal{width:100%;max-height:92vh}
+  .btnrow .btn{flex:1 1 auto;text-align:center}
 }
 </style>
 
 <div class="app">
+  <header class="mtop">
+    <button id="btnMenu" aria-label="Apri il menu delle squadre">☰</button>
+    <span class="mt-t" id="mtopTitolo">Fantamanager</span>
+    <span class="mt-s" id="mtopStagione"></span>
+  </header>
   <aside class="rail">
     <div class="brand">
       <h1 id="leagueName">Lega</h1>
@@ -363,6 +385,7 @@ tr:last-child td{border-bottom:none}
   </main>
 </div>
 
+<div class="scrimRail" id="scrimRail"></div>
 <div id="modalHost"></div>
 <div id="toastHost"></div>
 
@@ -706,6 +729,10 @@ function render(){
   const tr = document.getElementById("tabRich");
   if(tr){ tr.classList.toggle("hidden", !sonoAdmin());
     tr.textContent = azioni.length ? `Richieste (${azioni.length})` : "Richieste"; }
+  const mt = document.getElementById("mtopTitolo");
+  if(mt) mt.textContent = team() ? team().nome : "Fantamanager";
+  const ms = document.getElementById("mtopStagione");
+  if(ms) ms.textContent = `${S.annoStagione}/${String(S.annoStagione+1).slice(2)}`;
   renderRail();
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   const v = document.getElementById("view");
@@ -1980,7 +2007,7 @@ function viewRegole(){
 /* ================= interazione ================= */
 function bindView(){
   document.querySelectorAll("[data-team]").forEach(el => {
-    if(el.classList.contains("tbtn")) el.onclick = () => { sel = +el.dataset.team; render(); };
+    if(el.classList.contains("tbtn")) el.onclick = () => { sel = +el.dataset.team; menu(false); render(); };
   });
   document.querySelectorAll(".row[data-pl]").forEach(el => el.onclick = () => openPlayer(el.dataset.pl));
   const add = document.getElementById("btnAdd");
@@ -2363,7 +2390,7 @@ document.getElementById("btnNext").onclick = () => {
 };
 document.getElementById("btnPrev").onclick = () => { if(S.archivio && S.archivio.length) tornaIndietro(); };
 
-document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.tab; menu(false); render(); });
 function esportaDati(){
   const b = new Blob([JSON.stringify(S,null,1)], { type:"application/json" });
   const a = document.createElement("a");
@@ -2392,6 +2419,12 @@ document.getElementById("btnReset").onclick = () => {
     save(); render(); toast("Dati iniziali ripristinati");
   });
 };
+
+/* ---- menu a scomparsa su telefono ---- */
+const menu = (apri) => document.body.classList.toggle("menu", apri);
+document.getElementById("btnMenu").onclick = () => menu(!document.body.classList.contains("menu"));
+document.getElementById("scrimRail").onclick = () => menu(false);
+addEventListener("keydown", e => { if(e.key === "Escape") menu(false); });
 
 /* ---- app installabile ---- */
 let invitoInstalla = null;
