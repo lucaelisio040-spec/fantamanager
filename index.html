@@ -1853,119 +1853,89 @@ async function proponiScambio(){
   if(A.id !== io.squadra_id && B.id !== io.squadra_id){
     toast("Puoi proporre solo scambi che coinvolgono la tua squadra"); return;
   }
-  const io_e_A = A.id === io.squadra_id;
+  const sonoA = A.id === io.squadra_id;
+  const altra = sonoA ? B : A;
+  const nota = (document.getElementById("tradeNota") || {}).value || "";
+  // il contenuto e' sempre scritto dal punto di vista di chi propone
+  const proposta = {
+    giocatore: null,
+    miei:  [...(sonoA ? trade.pa : trade.pb)],
+    suoi:  [...(sonoA ? trade.pb : trade.pa)],
+    miePick: [...(sonoA ? trade.ka : trade.kb)],
+    suePick: [...(sonoA ? trade.kb : trade.ka)],
+    mieiCrediti: sonoA ? trade.ca : trade.cb,
+    suoiCrediti: sonoA ? trade.cb : trade.ca,
+    testo: nota.trim()
+  };
+  const { error } = await db.rpc("invia_messaggio",
+    { p_codice: codice, p_a: altra.id, p_tipo: "scambio", p_contenuto: proposta });
+  if(error){ toast("Invio non riuscito: " + error.message); return; }
+  await caricaMessaggi();
+  trade.pa.clear(); trade.pb.clear(); trade.ka.clear(); trade.kb.clear();
+  trade.ca = 0; trade.cb = 0;
+  render(); toast(`Proposta inviata a ${altra.nome}`);
+}
+
+// racconta a parole una proposta, dal punto di vista di chi la legge
+function descriviProposta(c, idProponente, idRicevente){
+  const nome = id => (S.squadre.find(s => s.id === id) || {}).nome || id;
+  const trovaP = id => S.squadre.flatMap(s => s.rosa).find(p => p.id === id);
+  const trovaK = id => S.picks.find(k => k.id === id);
+  const lato = (ids, pks, cr) => {
+    const pezzi = [];
+    (ids||[]).forEach(id => { const p = trovaP(id); if(p) pezzi.push(`${p.ruolo} ${p.nome}`); });
+    (pks||[]).forEach(id => { const k = trovaK(id); if(k) pezzi.push(`${k.giro}º ${k.anno}`); });
+    if(cr) pezzi.push(`${cr} crediti`);
+    return pezzi.join(", ") || "nulla";
+  };
+  return `<b>${esc(nome(idProponente))}</b> offre ${esc(lato(c.miei, c.miePick, c.mieiCrediti))}<br>`
+       + `<b>${esc(nome(idRicevente))}</b> cede ${esc(lato(c.suoi, c.suePick, c.suoiCrediti))}`;
+}
+
+// chi riceve accetta: da qui la proposta prosegue verso l'amministratore
+async function accettaProposta(id){
+  const m = messaggi.find(x => x.id === id);
+  if(!m) return;
+  const c = m.contenuto || {};
+  const ia = S.squadre.findIndex(s => s.id === m.a_squadra);      // io, che accetto
+  const ib = S.squadre.findIndex(s => s.id === m.da_squadra);     // chi ha proposto
+  if(ia < 0 || ib < 0){ toast("Squadra non trovata"); return; }
+  trade = { a:ia, b:ib, pa:new Set(c.suoi||[]), pb:new Set(c.miei||[]),
+            ka:new Set(c.suePick||[]), kb:new Set(c.miePick||[]),
+            ca:c.suoiCrediti||0, cb:c.mieiCrediti||0 };
+  const v = verificaScambio();
+  if(v.err.length){ toast("Non più valido: " + v.err[0]); return; }
+  // il contenuto viene ribaltato: ora "miei" sono i miei giocatori
   const ok = await inviaAzione("scambio", {
-    controparte: io_e_A ? B.id : A.id,
-    miei:  [...(io_e_A ? trade.pa : trade.pb)],
-    suoi:  [...(io_e_A ? trade.pb : trade.pa)],
-    miePick: [...(io_e_A ? trade.ka : trade.kb)],
-    suePick: [...(io_e_A ? trade.kb : trade.ka)],
-    mieiCrediti: io_e_A ? trade.ca : trade.cb,
-    suoiCrediti: io_e_A ? trade.cb : trade.ca
+    controparte: m.da_squadra,
+    miei: c.suoi||[], suoi: c.miei||[],
+    miePick: c.suePick||[], suePick: c.miePick||[],
+    mieiCrediti: c.suoiCrediti||0, suoiCrediti: c.mieiCrediti||0
   });
-  if(ok){
-    trade.pa.clear(); trade.pb.clear(); trade.ka.clear(); trade.kb.clear();
-    trade.ca = 0; trade.cb = 0;
-    render(); toast("Proposta inviata all'amministratore");
-  }
+  if(!ok) return;
+  await db.rpc("chiudi_messaggio", { p_codice: codice, p_id: id, p_esito: "accettato" });
+  await db.rpc("invia_messaggio", { p_codice: codice, p_a: m.da_squadra, p_tipo: "info",
+    p_contenuto: { giocatore: "Scambio", testo: "Ho accettato la tua proposta, è in attesa dell'amministratore." } });
+  await caricaMessaggi();
+  trade.pa.clear(); trade.pb.clear(); trade.ka.clear(); trade.kb.clear(); trade.ca = 0; trade.cb = 0;
+  render(); toast("Accettata, ora tocca all'amministratore");
 }
 
-function viewRiconfermeChiuse(sq){
-  const r = sq.riconfermeChiuse;
-  const mio = sq.id === io?.squadra_id;
-  const inAttesa = (azioni||[]).some(a => a.tipo === "annulla" && a.squadra_id === sq.id);
-  const esiti = S.finestra?.esiti || [];
-  const riga = (p, cls) => `<tr class="${cls||""}"><td style="color:var(--${p.ruolo})">${p.ruolo}</td>
-    <td>${esc(p.nome)}</td><td class="num">${p.prezzo ?? "—"}</td>
-    <td style="color:var(--tx-faint);font-size:12.5px">${cls ? (p.scelta ? "non riconfermato per scelta" : "contratto esaurito") : ""}</td></tr>`;
-  return `<div class="thead"><div><h2>Riconferme</h2>
-      <div class="pos">${esc(sq.nome)} · operazione conclusa il ${esc(r.quando)}</div></div>
-    <div class="stats">
-      <div class="stat"><div class="v">${r.tenuti.length}</div><div class="l">Riconfermati</div></div>
-      <div class="stat"><div class="v">${r.costo}</div><div class="l">Crediti spesi</div></div>
-      <div class="stat"><div class="v" style="color:var(--good)">${sq.crediti_residui}</div><div class="l">Restano per l'asta</div></div>
-      <div class="stat"><div class="v">${r.liberati.length}</div><div class="l">Liberati</div></div>
-    </div></div>
-    ${inAttesa ? `<div class="banner">Richiesta di annullamento inviata, in attesa che l'amministratore la valuti.</div>` : ""}
-    ${esiti.length ? `<div class="card" style="padding:0;overflow:hidden">
-      <div class="bhead"><span class="t">Come è andata in tutta la lega</span><span class="c">${esc(S.finestra.nome)}</span></div>
-      <table><thead><tr><th>Squadra</th><th class="num">Riconfermati</th><th class="num">Spesi</th><th>Nota</th></tr></thead>
-      <tbody>${esiti.map(e => `<tr class="${e.id===sq.id?"me":""}"><td>${esc(e.squadra)}</td>
-        <td class="num">${e.tenuti}</td><td class="num">${e.costo}</td>
-        <td style="color:var(--tx-faint);font-size:12.5px">${e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>` : ""}
-    <div class="card" style="padding:0;overflow:hidden">
-      <div class="bhead"><span class="t">Rimasti in rosa</span><span class="c">${r.tenuti.length}</span></div>
-      <table><tbody>${r.tenuti.map(p => riga(p)).join("")}</tbody></table></div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <div class="bhead"><span class="t">Tornati svincolati</span><span class="c">${r.liberati.length}</span></div>
-      <table><tbody>${r.liberati.map(p => riga(p,"lib")).join("")}</tbody></table></div>
-    <div class="hint" style="max-width:70ch">Chi non è stato riconfermato per scelta torna disponibile per tutti, ma per riprenderlo all'asta dovrai offrire almeno un credito in più del prezzo indicato. Per chi aveva il contratto esaurito quel vincolo non vale.</div>
-    <div class="btnrow">
-      ${sonoAdmin() ? `<button class="btn dgr" id="btnAnnullaF">Annulla lo svelamento</button>
-          <button class="btn" id="btnNuovaF">Apri una nuova finestra</button>`
-        : mio && !inAttesa ? `<button class="btn" id="btnChiediAnnullo">Richiesta di annullamento</button>` : ""}
-    </div>`;
-}
-
-/* ================= FINESTRE DI RICONFERMA ================= */
-let consegne = [];          // chi ha gia inviato, senza contenuti
-let miaScelta = null;       // la propria scelta, riletta dal database
-
-const finestra = () => S.finestra || null;
-const finestraAperta = () => !!(S.finestra && S.finestra.stato === "aperta");
-
-async function caricaConsegne(){
-  if(!collegato || !finestraAperta()) { consegne = []; return; }
-  const { data } = await db.rpc("stato_scelte", { p_finestra: S.finestra.id });
-  consegne = data || [];
-}
-async function caricaMiaScelta(){
-  miaScelta = null;
-  if(!collegato || !finestraAperta() || sonoAdmin()) return;
-  const { data } = await db.rpc("mia_scelta", { p_codice: codice, p_finestra: S.finestra.id });
-  miaScelta = data || null;
-}
-const haConsegnato = id => consegne.some(c => c.squadra_id === id);
-
-function apriFinestra(nome){
-  S.finestra = { id: "f" + Date.now(), nome, stato: "aperta",
-    apertaIl: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
-  S.squadre.forEach(sq => { delete sq.riconfermeChiuse; delete sq.snapshotPre; });
-  save(); render();
-}
-
-// lo svelamento applica tutte le scelte nello stesso istante:
-// da qui in poi le rose aggiornate sono visibili a chiunque
-async function svelaFinestra(){
-  const { data, error } = await db.rpc("leggi_scelte",
-    { p_codice: codice, p_finestra: S.finestra.id });
-  if(error){ toast("Non riesco a leggere le scelte: " + error.message); return; }
-  const scelte = data || [];
-  const esiti = [];
-  S.squadre.forEach(sq => {
-    const s = scelte.find(x => x.squadra_id === sq.id);
-    const ids = s ? (s.contenuto.ids || []) : [];
-    const err = applicaRiconferme(sq, ids);
-    esiti.push({ squadra: sq.nome, id: sq.id, consegnata: !!s,
-                 tenuti: err ? 0 : sq.riconfermeChiuse.tenuti.length,
-                 costo: err ? 0 : sq.riconfermeChiuse.costo, errore: err });
-  });
-  S.finestra.stato = "svelata";
-  S.finestra.svelataIl = new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" });
-  S.finestra.esiti = esiti;
-  S.storicoFinestre = S.storicoFinestre || [];
-  S.storicoFinestre.push({ ...S.finestra });
-  save(); render();
-  await db.rpc("azzera_scelte", { p_codice: codice, p_finestra: S.finestra.id });
-  await caricaConsegne();
-  toast("Riconferme svelate per tutte le squadre");
-}
-
-function annullaFinestra(){
-  S.squadre.forEach(sq => { if(sq.riconfermeChiuse) annullaRiconferme(sq); });
-  if(S.finestra) S.finestra.stato = "aperta";
-  save(); render();
-  toast("Svelamento annullato, la finestra è di nuovo aperta");
+// controproposta: riapro la scheda Scambi con i ruoli invertiti
+async function controproponi(id){
+  const m = messaggi.find(x => x.id === id);
+  if(!m) return;
+  const c = m.contenuto || {};
+  const ia = S.squadre.findIndex(s => s.id === m.a_squadra);
+  const ib = S.squadre.findIndex(s => s.id === m.da_squadra);
+  if(ia < 0 || ib < 0) return;
+  trade = { a:ia, b:ib, pa:new Set(c.suoi||[]), pb:new Set(c.miei||[]),
+            ka:new Set(c.suePick||[]), kb:new Set(c.miePick||[]),
+            ca:c.suoiCrediti||0, cb:c.mieiCrediti||0 };
+  await db.rpc("chiudi_messaggio", { p_codice: codice, p_id: id, p_esito: "archiviato" });
+  await caricaMessaggi();
+  tab = "scambi"; render();
+  toast("Modifica l'offerta e reinviala");
 }
 
 /* ================= MERCATO: lista cedibili ================= */
@@ -1984,7 +1954,7 @@ async function caricaMessaggi(){
 }
 const inVetrina = idGiocatore => cedibili.find(c => c.giocatore_id === idGiocatore);
 const messaggiPerMe = () => messaggi.filter(m =>
-  m.esito === "aperto" && (sonoAdmin() ? false : m.a_squadra === io?.squadra_id));
+  m.esito === "aperto" && !sonoAdmin() && m.a_squadra === io?.squadra_id);
 
 async function segnaCedibile(p, nota){
   const { error } = await db.rpc("metti_cedibile", { p_codice: codice, p_giocatore: p.id,
@@ -1997,66 +1967,6 @@ async function togliCedibile(p){
   const { error } = await db.rpc("togli_cedibile", { p_codice: codice, p_giocatore: p.id });
   if(error){ toast("Non riuscito: " + error.message); return false; }
   await caricaMercato(); return true;
-}
-
-function viewRichiesteManager(){
-  const mieId = io?.squadra_id;
-  const ricevuti = messaggi.filter(m => m.a_squadra === mieId);
-  const inviati  = messaggi.filter(m => m.da_squadra === mieId);
-  const nome = id => (S.squadre.find(s => s.id === id) || {}).nome || id;
-  const riga = (m, ricevuto) => {
-    const c = m.contenuto || {};
-    const chi = ricevuto ? nome(m.da_squadra) : nome(m.a_squadra);
-    return `<div class="alert">
-      <span class="ic" style="color:var(--${m.tipo==="info"?"info":"warn"})">${m.tipo==="info"?"?":"⇄"}</span>
-      <span class="tx"><b>${ricevuto ? esc(chi)+" ti scrive" : "Hai scritto a "+esc(chi)}</b>
-        <div style="color:var(--tx-dim);margin:3px 0">${m.tipo==="info"
-          ? `chiede informazioni su <b>${esc(c.giocatore||"?")}</b>` : `proposta su <b>${esc(c.giocatore||"?")}</b>`}</div>
-        ${c.testo ? `<div class="ced-nota" style="margin:5px 0">${esc(c.testo)}</div>` : ""}
-        <div style="font-size:12px">${new Date(m.creato).toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"})}${m.esito!=="aperto"?" · "+esc(m.esito):""}</div>
-        ${ricevuto && m.esito === "aperto" ? `<div class="btnrow" style="margin-top:8px">
-          <button class="btn" data-rispondi="${m.id}">Rispondi</button>
-          <button class="btn" data-archivia="${m.id}">Archivia</button></div>` : ""}
-      </span></div>`;
-  };
-  const aperti = ricevuti.filter(m => m.esito === "aperto");
-  return `<div class="thead"><div><h2>Richieste</h2>
-      <div class="pos">Quello che gli altri manager ti hanno scritto sui giocatori in vetrina.</div></div>
-    <div class="stats"><div class="stat"><div class="v">${aperti.length}</div><div class="l">Da leggere</div></div></div></div>
-    ${ricevuti.length ? `<div class="block"><div class="bhead"><span class="t">Ricevute</span><span class="c">${ricevuti.length}</span></div>
-      ${ricevuti.map(m => riga(m,true)).join("")}</div>`
-      : `<div class="card"><div class="ok-empty">Nessuna richiesta ricevuta.</div></div>`}
-    ${inviati.length ? `<div class="block"><div class="bhead"><span class="t">Inviate</span><span class="c">${inviati.length}</span></div>
-      ${inviati.map(m => riga(m,false)).join("")}</div>` : ""}`;
-}
-
-function rispondiMessaggio(id){
-  const m = messaggi.find(x => x.id === id);
-  if(!m) return;
-  const nome = (S.squadre.find(s => s.id === m.da_squadra) || {}).nome || m.da_squadra;
-  const c = m.contenuto || {};
-  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(420px,100%)">
-    <div class="mhead"><h3>Rispondi a ${esc(nome)}</h3>
-      <div class="s">${esc(c.giocatore || "")}</div></div>
-    <div class="mbody">
-      ${c.testo ? `<div class="ced-nota" style="margin-bottom:12px">${esc(c.testo)}</div>` : ""}
-      <div class="f"><label>La tua risposta</label>
-        <input id="rMsg" placeholder="es. lo cedo per 40 crediti" maxlength="200"></div>
-    </div>
-    <div class="mfoot"><button class="btn" id="rNo">Annulla</button>
-      <button class="btn pri" id="rSi">Invia</button></div></div></div>`;
-  const close = () => document.getElementById("modalHost").innerHTML = "";
-  document.getElementById("rNo").onclick = close;
-  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
-  document.getElementById("rSi").onclick = async () => {
-    const testo = document.getElementById("rMsg").value.trim();
-    if(!testo){ toast("Scrivi qualcosa"); return; }
-    const { error } = await db.rpc("invia_messaggio", { p_codice: codice, p_a: m.da_squadra,
-      p_tipo: "info", p_contenuto: { giocatore: c.giocatore, giocatoreId: c.giocatoreId, testo } });
-    if(error){ toast("Invio non riuscito: " + error.message); return; }
-    await db.rpc("chiudi_messaggio", { p_codice: codice, p_id: id, p_esito: "archiviato" });
-    await caricaMessaggi(); close(); render(); toast("Risposta inviata");
-  };
 }
 
 function viewMercato(){
@@ -2132,6 +2042,183 @@ function apriTrattativa(idGiocatore){
     close(); tab = "scambi"; render();
     toast(`${d.nome} inserito nello scambio: scegli cosa offrire`);
   };
+}
+
+/* ================= POSTA DEL MANAGER ================= */
+function viewRichiesteManager(){
+  const mieId = io?.squadra_id;
+  const ricevuti = messaggi.filter(m => m.a_squadra === mieId);
+  const inviati  = messaggi.filter(m => m.da_squadra === mieId);
+  const nome = id => (S.squadre.find(s => s.id === id) || {}).nome || id;
+
+  const riga = (m, ricevuto) => {
+    const c = m.contenuto || {};
+    const chi = ricevuto ? nome(m.da_squadra) : nome(m.a_squadra);
+    const esitoTx = { accettato:"accettata", rifiutato:"rifiutata", archiviato:"archiviata" }[m.esito] || "";
+    const corpo = m.tipo === "scambio"
+      ? `<div style="color:var(--tx-dim);margin:5px 0;line-height:1.5">${descriviProposta(c, m.da_squadra, m.a_squadra)}</div>`
+      : `<div style="color:var(--tx-dim);margin:3px 0">${esc(c.giocatore||"?")}</div>`;
+    // su una proposta ricevuta e ancora aperta si puo accettare, controproporre o rifiutare
+    const bottoni = ricevuto && m.esito === "aperto"
+      ? (m.tipo === "scambio"
+          ? `<button class="btn pri" data-acc="${m.id}">Accetta</button>
+             <button class="btn" data-contro="${m.id}">Controproponi</button>
+             <button class="btn dgr" data-rif="${m.id}">Rifiuta</button>`
+          : `<button class="btn" data-rispondi="${m.id}">Rispondi</button>
+             <button class="btn" data-archivia="${m.id}">Archivia</button>`)
+      : `<button class="btn" data-elimina="${m.id}">Elimina</button>`;
+    return `<div class="alert">
+      <span class="ic" style="color:var(--${m.tipo==="info"?"info":"warn"})">${m.tipo==="info"?"?":"⇄"}</span>
+      <span class="tx"><b>${ricevuto ? esc(chi)+" ti scrive" : "Hai scritto a "+esc(chi)}</b>
+        ${corpo}
+        ${c.testo ? `<div class="ced-nota" style="margin:5px 0">${esc(c.testo)}</div>` : ""}
+        <div style="font-size:12px">${new Date(m.creato).toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"})}${esitoTx?" · "+esitoTx:""}</div>
+        <div class="btnrow" style="margin-top:8px">${bottoni}</div>
+      </span></div>`;
+  };
+
+  const aperti = ricevuti.filter(m => m.esito === "aperto");
+  return `<div class="thead"><div><h2>Richieste</h2>
+      <div class="pos">Le proposte e le domande che ti arrivano dagli altri manager.</div></div>
+    <div class="stats"><div class="stat"><div class="v">${aperti.length}</div><div class="l">Da gestire</div></div></div></div>
+    ${ricevuti.length ? `<div class="block"><div class="bhead"><span class="t">Ricevute</span><span class="c">${ricevuti.length}</span></div>
+      ${ricevuti.map(m => riga(m,true)).join("")}</div>`
+      : `<div class="card"><div class="ok-empty">Nessuna richiesta ricevuta.</div></div>`}
+    ${inviati.length ? `<div class="block"><div class="bhead"><span class="t">Inviate</span><span class="c">${inviati.length}</span></div>
+      ${inviati.map(m => riga(m,false)).join("")}</div>` : ""}
+    ${messaggi.some(m => m.esito !== "aperto") ? `<div class="btnrow">
+      <button class="btn" id="btnPulisci">Cancella le notifiche già gestite</button></div>` : ""}`;
+}
+
+function rispondiMessaggio(id){
+  const m = messaggi.find(x => x.id === id);
+  if(!m) return;
+  const nome = (S.squadre.find(s => s.id === m.da_squadra) || {}).nome || m.da_squadra;
+  const c = m.contenuto || {};
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(420px,100%)">
+    <div class="mhead"><h3>Rispondi a ${esc(nome)}</h3>
+      <div class="s">${esc(c.giocatore || "")}</div></div>
+    <div class="mbody">
+      ${c.testo ? `<div class="ced-nota" style="margin-bottom:12px">${esc(c.testo)}</div>` : ""}
+      <div class="f"><label>La tua risposta</label>
+        <input id="rMsg" placeholder="es. lo cedo per 40 crediti" maxlength="200"></div>
+    </div>
+    <div class="mfoot"><button class="btn" id="rNo">Annulla</button>
+      <button class="btn pri" id="rSi">Invia</button></div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("rNo").onclick = close;
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  document.getElementById("rSi").onclick = async () => {
+    const testo = document.getElementById("rMsg").value.trim();
+    if(!testo){ toast("Scrivi qualcosa"); return; }
+    const { error } = await db.rpc("invia_messaggio", { p_codice: codice, p_a: m.da_squadra,
+      p_tipo: "info", p_contenuto: { giocatore: c.giocatore, giocatoreId: c.giocatoreId, testo } });
+    if(error){ toast("Invio non riuscito: " + error.message); return; }
+    await db.rpc("chiudi_messaggio", { p_codice: codice, p_id: id, p_esito: "archiviato" });
+    await caricaMessaggi(); close(); render(); toast("Risposta inviata");
+  };
+}
+
+/* ================= FINESTRE DI RICONFERMA ================= */
+let consegne = [];          // chi ha gia inviato, senza contenuti
+let miaScelta = null;       // la propria scelta, riletta dal database
+
+const finestra = () => S.finestra || null;
+const finestraAperta = () => !!(S.finestra && S.finestra.stato === "aperta");
+
+async function caricaConsegne(){
+  if(!collegato || !finestraAperta()) { consegne = []; return; }
+  const { data } = await db.rpc("stato_scelte", { p_finestra: S.finestra.id });
+  consegne = data || [];
+}
+async function caricaMiaScelta(){
+  miaScelta = null;
+  if(!collegato || !finestraAperta() || sonoAdmin()) return;
+  const { data } = await db.rpc("mia_scelta", { p_codice: codice, p_finestra: S.finestra.id });
+  miaScelta = data || null;
+}
+const haConsegnato = id => consegne.some(c => c.squadra_id === id);
+
+function apriFinestra(nome){
+  S.finestra = { id: "f" + Date.now(), nome, stato: "aperta",
+    apertaIl: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
+  S.squadre.forEach(sq => { delete sq.riconfermeChiuse; delete sq.snapshotPre; });
+  save(); render();
+}
+
+// lo svelamento applica tutte le scelte nello stesso istante:
+// da qui in poi le rose aggiornate sono visibili a chiunque
+async function svelaFinestra(){
+  const { data, error } = await db.rpc("leggi_scelte",
+    { p_codice: codice, p_finestra: S.finestra.id });
+  if(error){ toast("Non riesco a leggere le scelte: " + error.message); return; }
+  const scelte = data || [];
+  const esiti = [];
+  S.squadre.forEach(sq => {
+    const s = scelte.find(x => x.squadra_id === sq.id);
+    const ids = s ? (s.contenuto.ids || []) : [];
+    const err = applicaRiconferme(sq, ids);
+    esiti.push({ squadra: sq.nome, id: sq.id, consegnata: !!s,
+                 tenuti: err ? 0 : sq.riconfermeChiuse.tenuti.length,
+                 costo: err ? 0 : sq.riconfermeChiuse.costo, errore: err });
+  });
+  S.finestra.stato = "svelata";
+  S.finestra.svelataIl = new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" });
+  S.finestra.esiti = esiti;
+  S.storicoFinestre = S.storicoFinestre || [];
+  S.storicoFinestre.push({ ...S.finestra });
+  save(); render();
+  await db.rpc("azzera_scelte", { p_codice: codice, p_finestra: S.finestra.id });
+  await caricaConsegne();
+  toast("Riconferme svelate per tutte le squadre");
+}
+
+function annullaFinestra(){
+  S.squadre.forEach(sq => { if(sq.riconfermeChiuse) annullaRiconferme(sq); });
+  if(S.finestra) S.finestra.stato = "aperta";
+  save(); render();
+  toast("Svelamento annullato, la finestra è di nuovo aperta");
+}
+
+/* ---- riepilogo dopo lo svelamento ---- */
+function viewRiconfermeChiuse(sq){
+  const r = sq.riconfermeChiuse;
+  if(!r) return `<div class="thead"><div><h2>Riconferme</h2>
+    <div class="pos">${esc(sq.nome)}</div></div></div>
+    <div class="card"><div class="ok-empty">Questa squadra non ha consegnato le riconferme in questa finestra: la sua prima squadra è tornata svincolata.</div></div>`;
+  const mio = sq.id === io?.squadra_id;
+  const inAttesa = (azioni||[]).some(a => a.tipo === "annulla" && a.squadra_id === sq.id);
+  const esiti = S.finestra?.esiti || [];
+  const riga = (p, cls) => `<tr class="${cls||""}"><td style="color:var(--${p.ruolo})">${p.ruolo}</td>
+    <td>${esc(p.nome)}</td><td class="num">${p.prezzo ?? "—"}</td>
+    <td style="color:var(--tx-faint);font-size:12.5px">${cls ? (p.scelta ? "non riconfermato per scelta" : "contratto esaurito") : ""}</td></tr>`;
+  return `<div class="thead"><div><h2>Riconferme</h2>
+      <div class="pos">${esc(sq.nome)} · operazione conclusa il ${esc(r.quando)}</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${r.tenuti.length}</div><div class="l">Riconfermati</div></div>
+      <div class="stat"><div class="v">${r.costo}</div><div class="l">Crediti spesi</div></div>
+      <div class="stat"><div class="v" style="color:var(--good)">${sq.crediti_residui}</div><div class="l">Restano per l'asta</div></div>
+      <div class="stat"><div class="v">${r.liberati.length}</div><div class="l">Liberati</div></div>
+    </div></div>
+    ${inAttesa ? `<div class="banner">Richiesta di annullamento inviata, in attesa che l'amministratore la valuti.</div>` : ""}
+    ${esiti.length ? `<div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Come è andata in tutta la lega</span><span class="c">${esc(S.finestra.nome)}</span></div>
+      <table><thead><tr><th>Squadra</th><th class="num">Riconfermati</th><th class="num">Spesi</th><th>Nota</th></tr></thead>
+      <tbody>${esiti.map(e => `<tr class="${e.id===sq.id?"me":""}"><td>${esc(e.squadra)}</td>
+        <td class="num">${e.tenuti}</td><td class="num">${e.costo}</td>
+        <td style="color:var(--tx-faint);font-size:12.5px">${e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Rimasti in rosa</span><span class="c">${r.tenuti.length}</span></div>
+      <table><tbody>${r.tenuti.map(p => riga(p)).join("")}</tbody></table></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Tornati svincolati</span><span class="c">${r.liberati.length}</span></div>
+      <table><tbody>${r.liberati.map(p => riga(p,"lib")).join("")}</tbody></table></div>
+    <div class="hint" style="max-width:70ch">Chi non è stato riconfermato per scelta torna disponibile per tutti, ma per riprenderlo all'asta dovrai offrire almeno un credito in più del prezzo indicato. Per chi aveva il contratto esaurito quel vincolo non vale.</div>
+    <div class="btnrow">
+      ${sonoAdmin() ? `<button class="btn dgr" id="btnAnnullaF">Annulla lo svelamento</button>
+          <button class="btn" id="btnNuovaF">Apri una nuova finestra</button>`
+        : mio && !inAttesa ? `<button class="btn" id="btnChiediAnnullo">Richiesta di annullamento</button>` : ""}
+    </div>`;
 }
 
 function viewControlli(){
