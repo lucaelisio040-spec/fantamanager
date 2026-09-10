@@ -286,6 +286,26 @@ tr:last-child td{border-bottom:none}
 .ced-nota{font-size:12.5px;color:var(--tx-dim);background:var(--raised);border-radius:5px;
   padding:6px 9px;margin-top:8px}
 
+/* ---------- desiderati ---------- */
+.segmenti{display:inline-flex;gap:2px;border:1px solid var(--line);border-radius:7px;
+  padding:2px;margin-bottom:14px;background:var(--panel)}
+.seg{padding:6px 14px;border-radius:5px;font-size:13px;font-weight:500;color:var(--tx-faint)}
+.seg:hover{color:var(--tx-dim)}
+.seg.on{background:var(--raised);color:var(--tx)}
+.cuore{font-size:15px;line-height:1;color:var(--tx-faint);padding:1px 5px;border-radius:4px}
+.cuore:hover{color:#E8677A}
+.cuore.on{color:#E8677A}
+.cuore.mini{font-size:12px;padding:0 3px;cursor:default;vertical-align:1px}
+.prefgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.pref{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px 14px}
+.pref-h{display:flex;align-items:center;gap:9px}
+.pref-h .rl{font-family:'Barlow Condensed';font-weight:700;font-size:15px}
+.pref-n{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pref-d{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-top:9px;font-size:12.5px}
+.pref-d span{color:var(--tx-dim);display:flex;justify-content:space-between;gap:8px;
+  border-bottom:1px solid var(--line-soft);padding-bottom:3px}
+.pref-d i{font-style:normal;color:var(--tx-faint)}
+
 .banner{border:1px solid var(--line);border-left:3px solid var(--info);border-radius:0 6px 6px 0;
   background:var(--panel);padding:10px 14px;margin:14px 0;font-size:13px;color:var(--tx-dim)}
 .mtop{display:none}
@@ -337,6 +357,9 @@ tr:last-child td{border-bottom:none}
   .tradearrow{display:none}
   .pkgrid{grid-template-columns:1fr}
   .cedgrid{grid-template-columns:1fr}
+  .prefgrid{grid-template-columns:1fr}
+  .segmenti{display:flex;width:100%}
+  .seg{flex:1;text-align:center;padding:7px 8px;font-size:12.5px}
   .g4,.g2{grid-template-columns:1fr}
 
   .row{grid-template-columns:18px 1fr 56px 50px 20px;gap:7px;padding:7px 11px}
@@ -804,9 +827,10 @@ function rowPlayer(p, stato){
   const fasciaTag = p.reparto === "primavera" && p.fascia
     ? `<span class="pill" style="background:#2A2036;color:#C89BE8">${p.fascia}</span>` : "";
   const frTag = p.reparto === "fuori_rosa" ? `<span class="pill" style="background:#20303C;color:#8FC4E0">fuori rosa</span>` : "";
+  const cuore = ePreferito(p.id) ? `<span class="cuore on mini" title="Nella tua lista">♥</span>` : "";
   return `<div class="row ${stato||""}" data-pl="${p.id}">
     <span class="rl" style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span>
-    <span class="nm"><b>${esc(p.nome)}</b> <span>${esc(p.club||"svincolato")}</span> ${fasciaTag}${frTag}</span>
+    <span class="nm"><b>${esc(p.nome)}</b> <span>${esc(p.club||"svincolato")}</span> ${fasciaTag}${frTag}${cuore}</span>
     <span class="pz">${p.prezzo != null ? p.prezzo+" cr" : "—"}</span>
     ${clock(p)}
     <span class="fl">${flag}</span></div>`;
@@ -1987,22 +2011,32 @@ function viewMercato(){
         <span class="ced-p">${d.prezzo ?? "—"} cr</span>
       </div>
       <div class="ced-m">${esc(d.club || "svincolato")}${anni!=null?` · ${anni>0?anni+(anni===1?" stagione":" stagioni"):"scaduto"}`:""}${d.reparto!=="prima"?" · vivaio":""}</div>
-      <div class="ced-s">${proprio ? "in vetrina" : esc(sq?.nome || c.squadra_id)}</div>
+      <div class="ced-s">${proprio ? "in vetrina" : esc(sq?.nome || c.squadra_id)}
+        ${(!proprio && !sonoAdmin()) ? `<button class="cuore ${ePreferito(c.giocatore_id)?"on":""}"
+          data-cuore="${c.giocatore_id}" title="${ePreferito(c.giocatore_id)?"Togli dai desiderati":"Aggiungi ai desiderati"}">${ePreferito(c.giocatore_id)?"♥":"♡"}</button>` : ""}</div>
       ${d.nota ? `<div class="ced-nota">${esc(d.nota)}</div>` : ""}
       ${proprio ? `<div class="btnrow" style="margin-top:9px"><button class="btn" data-ritira="${c.giocatore_id}">Ritira dalla vetrina</button></div>` : ""}
     </div>`;
   };
-  return `<div class="thead"><div><h2>Mercato</h2>
-      <div class="pos">I giocatori che gli altri manager hanno messo in vetrina. Toccane uno per chiedere informazioni o proporre uno scambio.</div></div>
-    <div class="stats">
-      <div class="stat"><div class="v">${altrui.length}</div><div class="l">Disponibili</div></div>
-      ${mieiId ? `<div class="stat"><div class="v">${miei.length}</div><div class="l">I tuoi in vetrina</div></div>` : ""}
-    </div></div>
-    ${altrui.length ? `<div class="cedgrid">${altrui.map(c => scheda(c,false)).join("")}</div>`
+  const vetrina = `${altrui.length ? `<div class="cedgrid">${altrui.map(c => scheda(c,false)).join("")}</div>`
       : `<div class="card"><div class="ok-empty">Nessuna squadra ha messo giocatori in vetrina al momento.</div></div>`}
     ${miei.length ? `<h3 style="font-size:17px;text-transform:uppercase;margin:22px 0 10px">I tuoi in vetrina</h3>
       <div class="cedgrid">${miei.map(c => scheda(c,true)).join("")}</div>` : ""}
     ${!mieiId ? "" : `<div class="hint" style="margin-top:16px;max-width:70ch">Per mettere un tuo giocatore in vetrina aprilo dalla scheda Rosa e usa il pulsante in fondo.</div>`}`;
+  const suPreferiti = mercatoVista === "preferiti" && !sonoAdmin();
+  return `<div class="thead"><div><h2>Mercato</h2>
+      <div class="pos">${suPreferiti
+        ? "I giocatori che segui, con la loro situazione aggiornata e quello che vi siete detti."
+        : "I giocatori che gli altri manager hanno messo in vetrina. Toccane uno per trattare."}</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${altrui.length}</div><div class="l">In vetrina</div></div>
+      ${sonoAdmin() ? "" : `<div class="stat"><div class="v">${preferiti.length}</div><div class="l">Desiderati</div></div>`}
+    </div></div>
+    ${sonoAdmin() ? "" : `<div class="segmenti">
+      <button class="seg ${suPreferiti?"":"on"}" data-vista="vetrina">In vetrina</button>
+      <button class="seg ${suPreferiti?"on":""}" data-vista="preferiti">I miei desiderati ${preferiti.length?`(${preferiti.length})`:""}</button>
+    </div>`}
+    ${suPreferiti ? viewPreferiti() : vetrina}`;
 }
 
 // da qui parte una richiesta di informazioni oppure uno scambio gia impostato
@@ -2222,6 +2256,113 @@ function viewRiconfermeChiuse(sq){
           <button class="btn" id="btnNuovaF">Apri una nuova finestra</button>`
         : mio && !inAttesa ? `<button class="btn" id="btnChiediAnnullo">Richiesta di annullamento</button>` : ""}
     </div>`;
+}
+
+/* ================= DESIDERATI ================= */
+let preferiti = [];              // solo i miei, invisibili agli altri
+let mercatoVista = "vetrina";    // "vetrina" oppure "preferiti"
+
+async function caricaPreferiti(){
+  if(!collegato || sonoAdmin()){ preferiti = []; return; }
+  const { data } = await db.rpc("miei_preferiti", { p_codice: codice });
+  preferiti = data || [];
+}
+const ePreferito = id => preferiti.some(p => p.giocatore_id === id);
+
+async function segnaPreferito(p, sq){
+  const { error } = await db.rpc("metti_preferito", { p_codice: codice, p_giocatore: p.id,
+    p_dati: { nome:p.nome, ruolo:p.ruolo, squadra:sq?.id || null } });
+  if(error){ toast("Non riuscito: " + error.message); return false; }
+  await caricaPreferiti(); return true;
+}
+async function togliPreferito(id){
+  const { error } = await db.rpc("togli_preferito", { p_codice: codice, p_giocatore: id });
+  if(error){ toast("Non riuscito: " + error.message); return false; }
+  await caricaPreferiti(); return true;
+}
+
+// dove si trova adesso un giocatore, indipendentemente da quando l'ho segnato
+function dovE(id){
+  for(const sq of S.squadre){
+    const p = sq.rosa.find(x => x.id === id);
+    if(p) return { p, sq };
+  }
+  return null;
+}
+// tutto quello che ci siamo detti su quel giocatore, in ordine di tempo
+function scambiDiMessaggi(idGiocatore){
+  return messaggi
+    .filter(m => (m.contenuto || {}).giocatoreId === idGiocatore)
+    .sort((a,b) => new Date(a.creato) - new Date(b.creato));
+}
+
+function viewPreferiti(){
+  if(!preferiti.length) return `<div class="card"><div class="ok-empty">
+    La tua lista è vuota. Apri la rosa di un'altra squadra, tocca un giocatore e premi il cuore per aggiungerlo. Puoi farlo anche dai giocatori in vetrina.</div></div>`;
+  const righe = preferiti.map(f => {
+    const trovato = dovE(f.giocatore_id);
+    if(!trovato) return `<div class="pref"><div class="pref-h">
+      <span class="pref-n">${esc((f.dati||{}).nome || "giocatore")}</span>
+      <button class="cuore on" data-cuore="${f.giocatore_id}" title="Togli dai desiderati">♥</button></div>
+      <div class="ced-m">non è più in nessuna rosa</div></div>`;
+    const { p, sq } = trovato;
+    const anni = anniResidui(p);
+    const vet = inVetrina(p.id);
+    const conv = scambiDiMessaggi(p.id);
+    const ultimo = conv[conv.length - 1];
+    return `<div class="pref">
+      <div class="pref-h">
+        <span class="rl" style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span>
+        <span class="pref-n">${esc(p.nome)}</span>
+        <button class="cuore on" data-cuore="${p.id}" title="Togli dai desiderati">♥</button>
+      </div>
+      <div class="pref-d">
+        <span><i>Squadra</i>${esc(sq.nome)}</span>
+        <span><i>Club</i>${esc(p.club || "svincolato")}</span>
+        <span><i>Prezzo</i>${p.prezzo ?? "—"} cr</span>
+        <span><i>Quotazione</i>${quotazione(p) ?? "—"}</span>
+        <span><i>Contratto</i>${anni == null ? "—" : anni > 0 ? `fino al 1/09/${p.scadenza.slice(0,4)}` : "scaduto"}</span>
+        <span><i>Reparto</i>${p.reparto === "prima" ? RUOLO_NOME[p.ruolo] : p.reparto === "primavera" ? "vivaio " + (p.fascia||"") : "fuori rosa"}</span>
+      </div>
+      ${vet ? `<div class="ced-nota"><b>In vetrina.</b>${(vet.dati||{}).nota ? " " + esc(vet.dati.nota) : ""}</div>` : ""}
+      ${ultimo ? `<div class="ced-nota"><b>${esc(ultimo.da_squadra === io?.squadra_id ? "Hai scritto" : (S.squadre.find(s=>s.id===ultimo.da_squadra)||{}).nome || "Risposta")}:</b> ${esc((ultimo.contenuto||{}).testo || "—")}</div>` : ""}
+      <div class="btnrow" style="margin-top:9px">
+        <button class="btn" data-info="${p.id}">Chiedi informazioni</button>
+        <button class="btn" data-prop="${p.id}">Proponi scambio</button>
+        ${conv.length > 1 ? `<button class="btn" data-conv="${p.id}">Conversazione (${conv.length})</button>` : ""}
+      </div></div>`;
+  }).join("");
+  return `<div class="prefgrid">${righe}</div>`;
+}
+
+// scheda per chiedere informazioni su un giocatore qualsiasi, anche fuori vetrina
+function apriInfoGiocatore(id){
+  const trovato = dovE(id);
+  if(!trovato) return;
+  const { p, sq } = trovato;
+  const conv = scambiDiMessaggi(id);
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(460px,100%)">
+    <div class="mhead"><h3>${esc(p.nome)}</h3>
+      <div class="s">${esc(sq.nome)} · ${esc(p.club||"—")} · ${p.prezzo ?? "—"} crediti</div></div>
+    <div class="mbody">
+      ${conv.length ? `<div style="margin-bottom:13px">${conv.map(m => `<div class="ced-nota" style="margin-bottom:6px">
+        <b>${esc(m.da_squadra === io?.squadra_id ? "Tu" : (S.squadre.find(s=>s.id===m.da_squadra)||{}).nome || "—")}:</b>
+        ${esc((m.contenuto||{}).testo || "—")}</div>`).join("")}</div>` : ""}
+      <div class="f"><label>Messaggio per ${esc(sq.nome)}</label>
+        <input id="iMsg" placeholder="es. cosa chiedi per lui?" maxlength="200"></div>
+    </div>
+    <div class="mfoot"><button class="btn" id="iNo">Chiudi</button>
+      <button class="btn pri" id="iSi">Invia</button></div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  document.getElementById("iNo").onclick = close;
+  document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  document.getElementById("iSi").onclick = async () => {
+    const testo = document.getElementById("iMsg").value.trim();
+    const { error } = await db.rpc("invia_messaggio", { p_codice: codice, p_a: sq.id,
+      p_tipo: "info", p_contenuto: { giocatore: p.nome, giocatoreId: id, testo } });
+    if(error){ toast("Invio non riuscito: " + error.message); return; }
+    await caricaMessaggi(); close(); render(); toast(`Richiesta inviata a ${sq.nome}`);
+  };
 }
 
 function viewControlli(){
@@ -2461,6 +2602,34 @@ function bindView(){
     b.onclick = () => applicaAzione(+b.dataset.ok));
   document.querySelectorAll("[data-no]").forEach(b =>
     b.onclick = async () => { if(await decidi(+b.dataset.no, "rifiutata")){ render(); toast("Richiesta rifiutata"); } });
+  document.querySelectorAll("[data-vista]").forEach(el =>
+    el.onclick = () => { mercatoVista = el.dataset.vista; render(); });
+  document.querySelectorAll("[data-cuore]").forEach(el =>
+    el.onclick = async e => {
+      e.stopPropagation();                      // non deve aprire anche la trattativa
+      const id = el.dataset.cuore;
+      if(ePreferito(id)){ if(await togliPreferito(id)){ render(); toast("Tolto dai desiderati"); } }
+      else {
+        const t = dovE(id);
+        if(t && await segnaPreferito(t.p, t.sq)){ render(); toast("Aggiunto ai desiderati"); }
+      }
+    });
+  document.querySelectorAll("[data-info]").forEach(el =>
+    el.onclick = () => apriInfoGiocatore(el.dataset.info));
+  document.querySelectorAll("[data-conv]").forEach(el =>
+    el.onclick = () => apriInfoGiocatore(el.dataset.conv));
+  document.querySelectorAll("[data-prop]").forEach(el =>
+    el.onclick = () => {
+      const t = dovE(el.dataset.prop);
+      if(!t) return;
+      const ia = S.squadre.findIndex(x => x.id === io.squadra_id);
+      const ib = S.squadre.indexOf(t.sq);
+      if(ia < 0 || ib < 0) return;
+      trade = { a:ia, b:ib, pa:new Set(), pb:new Set([t.p.id]),
+                ka:new Set(), kb:new Set(), ca:0, cb:0 };
+      tab = "scambi"; render();
+      toast(`${t.p.nome} inserito nello scambio: scegli cosa offrire`);
+    });
   document.querySelectorAll("[data-ced]").forEach(el =>
     el.onclick = () => apriTrattativa(el.dataset.ced));
   document.querySelectorAll("[data-ritira]").forEach(el =>
@@ -2531,6 +2700,13 @@ function openPlayer(id){
       <div class="s">${esc(sq.nome)}${!isNew && a !== null ? " · " + (a > 0 ? a + " stagioni residue" : "contratto scaduto") : ""}</div></div>
     <div class="mbody">
       ${soloLettura ? `<div class="banner">Stai guardando la rosa: le modifiche ai giocatori le applica l'amministratore. Per uno scambio usa la scheda Scambi.</div>` : ""}
+      ${(!isNew && !miaSquadraQuesta && !sonoAdmin()) ? `<div class="card" style="padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:13px;color:var(--tx-dim);margin-bottom:8px">
+          ${ePreferito(p.id) ? "È nella tua lista dei desiderati." : "Seguilo per ritrovarlo nella scheda Mercato."}</div>
+        <div class="btnrow">
+          <button class="btn" id="mCuore">${ePreferito(p.id) ? "♥ Togli dai desiderati" : "♡ Aggiungi ai desiderati"}</button>
+          <button class="btn" id="mInfoG">Chiedi informazioni</button>
+        </div></div>` : ""}
       ${(!isNew && miaSquadraQuesta) ? `<div class="card" style="padding:12px 14px;margin-bottom:14px">
         <div style="font-size:13px;color:var(--tx-dim);margin-bottom:8px">
           ${inVetrina(p.id) ? "Questo giocatore è in vetrina: gli altri manager lo vedono fra i cedibili."
@@ -2576,6 +2752,14 @@ function openPlayer(id){
   const close = () => document.getElementById("modalHost").innerHTML = "";
   document.getElementById("mAnnulla").onclick = close;
   document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+
+  const cu = document.getElementById("mCuore");
+  if(cu) cu.onclick = async () => {
+    const ok = ePreferito(p.id) ? await togliPreferito(p.id) : await segnaPreferito(p, sq);
+    if(ok){ close(); render(); toast(ePreferito(p.id) ? "Aggiunto ai desiderati" : "Tolto dai desiderati"); }
+  };
+  const ig = document.getElementById("mInfoG");
+  if(ig) ig.onclick = () => { close(); apriInfoGiocatore(p.id); };
 
   const vet = document.getElementById("mVetrina");
   if(vet) vet.onclick = async () => {
@@ -2803,7 +2987,7 @@ async function avvia(){
     }
   }catch(e){ toast("Collegamento non riuscito: " + (e.message||e)); }
   if(collegato){ await caricaAzioni(); await caricaConsegne(); await caricaMiaScelta();
-                 await caricaMercato(); await caricaMessaggi(); ascolta();
+                 await caricaMercato(); await caricaMessaggi(); await caricaPreferiti(); ascolta();
                  setInterval(async () => { await caricaMessaggi();
                    if(tab === "richieste" && !sonoAdmin()) render(); }, 30000); }
   if(!sonoAdmin()) tab = "rosa";
