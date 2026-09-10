@@ -289,9 +289,9 @@ tr:last-child td{border-bottom:none}
 /* ---------- desiderati ---------- */
 .segmenti{display:inline-flex;gap:2px;border:1px solid var(--line);border-radius:7px;
   padding:2px;margin-bottom:14px;background:var(--panel)}
-.seg{padding:6px 14px;border-radius:5px;font-size:13px;font-weight:500;color:var(--tx-faint)}
-.seg:hover{color:var(--tx-dim)}
-.seg.on{background:var(--raised);color:var(--tx)}
+.segbtn{padding:6px 14px;border-radius:5px;font-size:13px;font-weight:500;color:var(--tx-faint)}
+.segbtn:hover{color:var(--tx-dim)}
+.segbtn.on{background:var(--raised);color:var(--tx)}
 .cuore{font-size:15px;line-height:1;color:var(--tx-faint);padding:1px 5px;border-radius:4px}
 .cuore:hover{color:#E8677A}
 .cuore.on{color:#E8677A}
@@ -359,7 +359,7 @@ tr:last-child td{border-bottom:none}
   .cedgrid{grid-template-columns:1fr}
   .prefgrid{grid-template-columns:1fr}
   .segmenti{display:flex;width:100%}
-  .seg{flex:1;text-align:center;padding:7px 8px;font-size:12.5px}
+  .segbtn{flex:1;text-align:center;padding:7px 8px;font-size:12.5px}
   .g4,.g2{grid-template-columns:1fr}
 
   .row{grid-template-columns:18px 1fr 56px 50px 20px;gap:7px;padding:7px 11px}
@@ -437,7 +437,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "10 set · desiderati";
+const APP_VERSION = "10 set · desiderati b";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -2036,8 +2036,8 @@ function viewMercato(){
       <div class="stat"><div class="v">${preferiti.length}</div><div class="l">Desiderati</div></div>
     </div></div>
     <div class="segmenti">
-      <button class="seg ${suPreferiti?"":"on"}" data-vista="vetrina">In vetrina</button>
-      <button class="seg ${suPreferiti?"on":""}" data-vista="preferiti">I miei desiderati ${preferiti.length?`(${preferiti.length})`:""}</button>
+      <button class="segbtn ${suPreferiti?"":"on"}" data-vista="vetrina">In vetrina</button>
+      <button class="segbtn ${suPreferiti?"on":""}" data-vista="preferiti">I miei desiderati ${preferiti.length?`(${preferiti.length})`:""}</button>
     </div>
     ${suPreferiti ? viewPreferiti() : vetrina}`;
 }
