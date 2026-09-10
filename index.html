@@ -2012,7 +2012,7 @@ function viewMercato(){
       </div>
       <div class="ced-m">${esc(d.club || "svincolato")}${anni!=null?` · ${anni>0?anni+(anni===1?" stagione":" stagioni"):"scaduto"}`:""}${d.reparto!=="prima"?" · vivaio":""}</div>
       <div class="ced-s">${proprio ? "in vetrina" : esc(sq?.nome || c.squadra_id)}
-        ${(!proprio && !sonoAdmin()) ? `<button class="cuore ${ePreferito(c.giocatore_id)?"on":""}"
+        ${!proprio ? `<button class="cuore ${ePreferito(c.giocatore_id)?"on":""}"
           data-cuore="${c.giocatore_id}" title="${ePreferito(c.giocatore_id)?"Togli dai desiderati":"Aggiungi ai desiderati"}">${ePreferito(c.giocatore_id)?"♥":"♡"}</button>` : ""}</div>
       ${d.nota ? `<div class="ced-nota">${esc(d.nota)}</div>` : ""}
       ${proprio ? `<div class="btnrow" style="margin-top:9px"><button class="btn" data-ritira="${c.giocatore_id}">Ritira dalla vetrina</button></div>` : ""}
@@ -2023,19 +2023,19 @@ function viewMercato(){
     ${miei.length ? `<h3 style="font-size:17px;text-transform:uppercase;margin:22px 0 10px">I tuoi in vetrina</h3>
       <div class="cedgrid">${miei.map(c => scheda(c,true)).join("")}</div>` : ""}
     ${!mieiId ? "" : `<div class="hint" style="margin-top:16px;max-width:70ch">Per mettere un tuo giocatore in vetrina aprilo dalla scheda Rosa e usa il pulsante in fondo.</div>`}`;
-  const suPreferiti = mercatoVista === "preferiti" && !sonoAdmin();
+  const suPreferiti = mercatoVista === "preferiti";
   return `<div class="thead"><div><h2>Mercato</h2>
       <div class="pos">${suPreferiti
         ? "I giocatori che segui, con la loro situazione aggiornata e quello che vi siete detti."
         : "I giocatori che gli altri manager hanno messo in vetrina. Toccane uno per trattare."}</div></div>
     <div class="stats">
       <div class="stat"><div class="v">${altrui.length}</div><div class="l">In vetrina</div></div>
-      ${sonoAdmin() ? "" : `<div class="stat"><div class="v">${preferiti.length}</div><div class="l">Desiderati</div></div>`}
+      <div class="stat"><div class="v">${preferiti.length}</div><div class="l">Desiderati</div></div>
     </div></div>
-    ${sonoAdmin() ? "" : `<div class="segmenti">
+    <div class="segmenti">
       <button class="seg ${suPreferiti?"":"on"}" data-vista="vetrina">In vetrina</button>
       <button class="seg ${suPreferiti?"on":""}" data-vista="preferiti">I miei desiderati ${preferiti.length?`(${preferiti.length})`:""}</button>
-    </div>`}
+    </div>
     ${suPreferiti ? viewPreferiti() : vetrina}`;
 }
 
@@ -2263,7 +2263,7 @@ let preferiti = [];              // solo i miei, invisibili agli altri
 let mercatoVista = "vetrina";    // "vetrina" oppure "preferiti"
 
 async function caricaPreferiti(){
-  if(!collegato || sonoAdmin()){ preferiti = []; return; }
+  if(!collegato){ preferiti = []; return; }
   const { data } = await db.rpc("miei_preferiti", { p_codice: codice });
   preferiti = data || [];
 }
@@ -2700,7 +2700,7 @@ function openPlayer(id){
       <div class="s">${esc(sq.nome)}${!isNew && a !== null ? " · " + (a > 0 ? a + " stagioni residue" : "contratto scaduto") : ""}</div></div>
     <div class="mbody">
       ${soloLettura ? `<div class="banner">Stai guardando la rosa: le modifiche ai giocatori le applica l'amministratore. Per uno scambio usa la scheda Scambi.</div>` : ""}
-      ${(!isNew && !miaSquadraQuesta && !sonoAdmin()) ? `<div class="card" style="padding:12px 14px;margin-bottom:14px">
+      ${(!isNew && !miaSquadraQuesta) ? `<div class="card" style="padding:12px 14px;margin-bottom:14px">
         <div style="font-size:13px;color:var(--tx-dim);margin-bottom:8px">
           ${ePreferito(p.id) ? "È nella tua lista dei desiderati." : "Seguilo per ritrovarlo nella scheda Mercato."}</div>
         <div class="btnrow">
