@@ -435,6 +435,9 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 // cambia a ogni aggiornamento delle rose incorporate: serve ad accorgersi
 // che i dati salvati in locale sono più vecchi di quelli del file
 const DATA_VERSION = "2026-07-21c";
+// versione del programma, mostrata in basso a sinistra: serve a capire
+// al volo se il file caricato e' davvero l'ultimo
+const APP_VERSION = "10 set · desiderati";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -768,9 +771,9 @@ function render(){
   bp.title = bp.disabled ? "Nessuna stagione precedente archiviata" : "Torna alla stagione precedente";
   const led = document.getElementById("led"), stx = document.getElementById("syncTx");
   led.className = "led " + (collegato ? "on" : "off");
-  stx.textContent = collegato
+  stx.textContent = (collegato
     ? (sonoAdmin() ? `amministratore · v${versione}` : `${miaSquadra()?.nome || io.nome} · sola lettura`)
-    : "non collegato";
+    : "non collegato") + ` · ${APP_VERSION}`;
   const tr = document.getElementById("tabRich");
   if(tr){
     const daFare = sonoAdmin() ? azioni.length : messaggiPerMe().length;
