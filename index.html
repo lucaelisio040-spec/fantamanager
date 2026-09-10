@@ -281,8 +281,9 @@ tr:last-child td{border-bottom:none}
 .ced-n{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ced-p{font-size:13px;color:var(--tx-dim)}
 .ced-m{font-size:12px;color:var(--tx-faint);margin-top:2px}
+.ced-f{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px}
 .ced-s{font-family:'Barlow Condensed';font-size:13px;font-weight:600;text-transform:uppercase;
-  color:var(--info);margin-top:6px}
+  color:var(--info);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ced-nota{font-size:12.5px;color:var(--tx-dim);background:var(--raised);border-radius:5px;
   padding:6px 9px;margin-top:8px}
 
@@ -437,7 +438,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "10 set · desiderati b";
+const APP_VERSION = "10 set · griglie";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -847,12 +848,11 @@ function blockRows(titolo, players, atteso){
   const righe = players.map((p,i) =>
     rowPlayer(p, atteso != null && i >= atteso ? "eccedenza" : "")).join("");
   const mancanti = Array.from({length:vuoti}, () => `<div class="row empty manca">
-      <span class="rl">!</span><span>Manca un giocatore in questo reparto</span>
-      <span></span><span></span><span></span></div>`).join("");
+      <span class="rl">!</span><span>Manca un giocatore in questo reparto</span></div>`).join("");
   return `<div class="block">
     <div class="bhead ${over?"over":""} ${vuoti?"short":""}"><span class="t">${titolo}</span>
       <span class="c">${players.length}${atteso!=null?" / "+atteso:""}</span></div>
-    ${righe || (atteso==null?`<div class="row empty"><span></span><span>Nessun giocatore</span><span></span><span></span><span></span></div>`:"")}
+    ${righe || (atteso==null?`<div class="row empty manca"><span class="rl">·</span><span>Nessun giocatore</span></div>`:"")}
     ${mancanti}
     ${eccesso ? `<div class="notaflag over">${eccesso} ${eccesso===1?"giocatore":"giocatori"} oltre il limite: servono uno svincolo o uno scambio.</div>` : ""}
     ${vuoti ? `<div class="notaflag short">${vuoti} ${vuoti===1?"posto libero":"posti liberi"} da riempire all'asta.</div>` : ""}
@@ -1036,7 +1036,7 @@ function lavagnaDraft(){
       return `<div class="pcell ${pk.assegnato?"presa":""}">
         <span class="n">${g}.${i+1}</span>
         <span>${esc(propr ? propr.nome : "?")}${scambiata?`<div class="via">via ${esc(nomeSquadra(pk.origine))}</div>`:""}</span>
-        <span class="via">${pk.assegnato ? "" : liberi + " slot liberi"}</span>
+        <span class="via slot">${pk.assegnato ? "" : liberi + " slot liberi"}</span>
         <span>${azione}</span></div>`;
     }).join("");
     const fatte = d.ordine.filter(oid => pickDi(anno,g,oid)?.assegnato).length;
@@ -2014,7 +2014,8 @@ function viewMercato(){
         <span class="ced-p">${d.prezzo ?? "—"} cr</span>
       </div>
       <div class="ced-m">${esc(d.club || "svincolato")}${anni!=null?` · ${anni>0?anni+(anni===1?" stagione":" stagioni"):"scaduto"}`:""}${d.reparto!=="prima"?" · vivaio":""}</div>
-      <div class="ced-s">${proprio ? "in vetrina" : esc(sq?.nome || c.squadra_id)}
+      <div class="ced-f">
+        <span class="ced-s">${proprio ? "in vetrina" : esc(sq?.nome || c.squadra_id)}</span>
         ${!proprio ? `<button class="cuore ${ePreferito(c.giocatore_id)?"on":""}"
           data-cuore="${c.giocatore_id}" title="${ePreferito(c.giocatore_id)?"Togli dai desiderati":"Aggiungi ai desiderati"}">${ePreferito(c.giocatore_id)?"♥":"♡"}</button>` : ""}</div>
       ${d.nota ? `<div class="ced-nota">${esc(d.nota)}</div>` : ""}
