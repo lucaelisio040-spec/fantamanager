@@ -1276,6 +1276,9 @@ function viewScambi(){
       ${v.err.length
         ? v.err.map(e => `<div class="err">${esc(e)}</div>`).join("")
         : `<div class="okmsg">Lo scambio rispetta il regolamento.</div>`}
+      ${sonoAdmin() ? "" : `<div class="f" style="margin-top:11px;max-width:420px">
+        <label>Due righe per l'altro manager, facoltative</label>
+        <input id="tradeNota" placeholder="es. ho bisogno di un difensore" maxlength="200"></div>`}
       <div class="btnrow">
         <button class="btn pri" id="btnTrade" ${v.err.length?"disabled style='opacity:.45'":""}>${sonoAdmin()?"Esegui lo scambio":"Proponi lo scambio"}</button>
         <button class="btn" id="btnTradeClear">Svuota</button>
@@ -2463,6 +2466,38 @@ function bindView(){
   document.querySelectorAll("[data-ritira]").forEach(el =>
     el.onclick = async () => { const c = cedibili.find(x => x.giocatore_id === el.dataset.ritira);
       if(c && await togliCedibile({ id: el.dataset.ritira })){ render(); toast("Ritirato dalla vetrina"); } });
+  document.querySelectorAll("[data-acc]").forEach(el =>
+    el.onclick = () => accettaProposta(+el.dataset.acc));
+  document.querySelectorAll("[data-contro]").forEach(el =>
+    el.onclick = () => controproponi(+el.dataset.contro));
+  document.querySelectorAll("[data-rif]").forEach(el =>
+    el.onclick = async () => {
+      const id = +el.dataset.rif;
+      const m = messaggi.find(x => x.id === id);
+      const { error } = await db.rpc("chiudi_messaggio",
+        { p_codice: codice, p_id: id, p_esito: "rifiutato" });
+      if(error){ toast("Non riuscito: " + error.message); return; }
+      if(m) await db.rpc("invia_messaggio", { p_codice: codice, p_a: m.da_squadra, p_tipo: "info",
+        p_contenuto: { giocatore: "Scambio", testo: "Ho rifiutato la tua proposta." } });
+      await caricaMessaggi(); render(); toast("Proposta rifiutata");
+    });
+  document.querySelectorAll("[data-elimina]").forEach(el =>
+    el.onclick = async () => {
+      const { error } = await db.rpc("elimina_messaggio",
+        { p_codice: codice, p_id: +el.dataset.elimina });
+      if(error){ toast("Non riuscito: " + error.message); return; }
+      await caricaMessaggi(); render(); toast("Notifica eliminata");
+    });
+  const bp = document.getElementById("btnPulisci");
+  if(bp) bp.onclick = () => conferma("Cancellare le notifiche già gestite?",
+    "Spariscono le proposte accettate, rifiutate e archiviate. Quelle ancora in attesa di risposta restano.",
+    async () => {
+      const { data, error } = await db.rpc("pulisci_messaggi", { p_codice: codice });
+      document.getElementById("modalHost").innerHTML = "";
+      if(error){ toast("Non riuscito: " + error.message); return; }
+      await caricaMessaggi(); render(); toast(`${data ?? 0} notifiche cancellate`);
+    });
+
   document.querySelectorAll("[data-rispondi]").forEach(el =>
     el.onclick = () => rispondiMessaggio(+el.dataset.rispondi));
   document.querySelectorAll("[data-archivia]").forEach(el =>
