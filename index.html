@@ -272,6 +272,13 @@ tr:last-child td{border-bottom:none}
 .rit .ro b{color:var(--good);font-weight:600}
 .rvoid{padding:9px 11px;font-size:12.5px;color:var(--tx-faint)}
 
+/* ---------- asta ---------- */
+.assegna{border:1px solid var(--info);border-radius:6px;padding:13px 15px;margin-top:14px;background:var(--bg)}
+.ass-h{display:flex;align-items:baseline;gap:9px}
+.ass-h .rl{font-family:'Barlow Condensed';font-weight:700;font-size:16px}
+.ass-h b{font-size:16px}
+tr.nonpuo td{opacity:.42}
+
 /* ---------- vetrina cedibili ---------- */
 .cedgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(226px,1fr));gap:12px}
 .ced{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:11px 13px;cursor:pointer}
@@ -416,6 +423,7 @@ tr:last-child td{border-bottom:none}
       <button class="tab" data-tab="mercato">Mercato</button>
       <button class="tab hidden" id="tabRich" data-tab="richieste">Richieste</button>
       <button class="tab" data-tab="riconferme">Riconferme</button>
+      <button class="tab" data-tab="asta">Asta</button>
       <button class="tab" data-tab="draft">Draft</button>
       <button class="tab" data-tab="picks">Picks</button>
       <button class="tab" data-tab="classifica">Classifica</button>
@@ -440,7 +448,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "11 set · permessi";
+const APP_VERSION = "11 set · asta";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -798,7 +806,7 @@ function render(){
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   const v = document.getElementById("view");
   v.innerHTML = ({ rosa:viewRosa, scambi:viewScambi, riconferme:viewRiconferme, draft:viewDraft,
-                   classifica:viewClassifica, storico:viewStorico, picks:viewPicks,
+                   classifica:viewClassifica, storico:viewStorico, picks:viewPicks, asta:viewAsta,
                    richieste:viewRichieste, mercato:viewMercato,
                    listone:viewListone, svincolati:viewSvincolati,
                    controlli:viewControlli, regole:viewRegole })[tab]();
@@ -2450,6 +2458,170 @@ function applicaSpostamento(sq, p, a, ruolo){
   return null;
 }
 
+/* ================= ASTA ================= */
+let astaCerca = "", astaSel = null;
+
+const astaAperta = () => !!(S.asta && S.asta.stato === "aperta");
+
+function apriAsta(nome, extra){
+  S.asta = { id:"a"+Date.now(), nome, stato:"aperta", acquisti:[],
+    apertaIl: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
+  if(extra) S.squadre.forEach(sq => sq.crediti_residui += extra);
+  save(); render();
+}
+function chiudiAsta(){
+  S.storicoAste = S.storicoAste || [];
+  if(S.asta){ S.asta.stato = "chiusa"; S.storicoAste.push(S.asta); }
+  S.asta = null; astaSel = null; astaCerca = "";
+  save(); render();
+}
+
+// quanti posti restano da riempire in prima squadra
+function slotMancanti(sq, ruolo){
+  if(ruolo) return Math.max(0, S.regole.rosa[ruolo] - reparto(sq, ruolo).length);
+  return RUOLI.reduce((n,r) => n + Math.max(0, S.regole.rosa[r] - reparto(sq,r).length), 0);
+}
+// comprando adesso, va tenuto un credito per ognuno dei posti che resteranno
+function massimoOfferibile(sq){
+  const restanti = slotMancanti(sq) - 1;
+  return Math.max(0, sq.crediti_residui - Math.max(0, restanti));
+}
+// chi non ha riconfermato un giocatore per scelta deve rilanciare di almeno un credito
+function minimoPer(sq, nome){
+  const s = (sq.svincolati || []).find(x => stessoGiocatore(x.nome, nome) && x.motivo === "non riconfermato");
+  return s ? (s.prezzo || 0) + 1 : 1;
+}
+
+function verificaAcquisto(sq, l, prezzo){
+  if(!astaAperta()) return "Nessuna asta aperta";
+  if(proprietario(l.nome)) return `${l.nome} è già tesserato`;
+  if(slotMancanti(sq, l.ruolo) <= 0) return `${RUOLO_NOME[l.ruolo]} già al completo`;
+  const min = minimoPer(sq, l.nome);
+  if(prezzo < min) return min > 1
+    ? `${sq.nome} lo ha svincolato a ${min-1}: per riprenderlo servono almeno ${min} crediti`
+    : "Il prezzo minimo è 1 credito";
+  const max = massimoOfferibile(sq);
+  if(prezzo > max) return `${sq.nome} può arrivare al massimo a ${max}: deve tenere un credito per ognuno degli altri ${slotMancanti(sq)-1} posti`;
+  return null;
+}
+
+function registraAcquisto(sq, l, prezzo){
+  const err = verificaAcquisto(sq, l, prezzo);
+  if(err) return err;
+  const g = { id:uid(), nome:l.nome, ruolo:l.ruolo, club:l.club, prezzo,
+    scadenza:`${S.annoStagione + S.regole.durataPrima}-09-01`, reparto:"prima" };
+  sq.rosa.push(g);
+  sq.crediti_residui -= prezzo;
+  S.asta.acquisti.push({ giocatore:g.id, nome:l.nome, ruolo:l.ruolo, squadra:sq.id, prezzo,
+    quando: new Date().toLocaleTimeString("it-IT",{ hour:"2-digit", minute:"2-digit" }) });
+  return null;
+}
+
+function annullaAcquisto(i){
+  const a = S.asta.acquisti[i];
+  if(!a) return;
+  const sq = S.squadre.find(s => s.id === a.squadra);
+  if(sq){
+    sq.rosa = sq.rosa.filter(p => p.id !== a.giocatore);
+    sq.crediti_residui += a.prezzo;
+  }
+  S.asta.acquisti.splice(i,1);
+  save(); render();
+  toast(`${a.nome} annullato, ${a.prezzo} crediti restituiti a ${sq?.nome || ""}`.trim());
+}
+
+function viewAsta(){
+  if(!astaAperta()){
+    const ultima = (S.storicoAste||[]).slice(-1)[0];
+    return `<div class="thead"><div><h2>Asta</h2>
+      <div class="pos">Nessuna asta in corso.</div></div></div>
+      ${ultima ? `<div class="banner">L'ultima è stata <b>${esc(ultima.nome)}</b>, con ${ultima.acquisti.length} acquisti.</div>` : ""}
+      ${sonoAdmin() ? `<div class="card"><h3>Apri l'asta</h3>
+        <div class="hint">Durante l'asta registri tu ogni assegnazione: crediti e rose si aggiornano per tutti nello stesso momento.</div>
+        <div class="grid g2" style="max-width:520px">
+          <div class="f"><label>Nome</label><input id="aNome" value="Asta ${S.annoStagione}/${String(S.annoStagione+1).slice(2)}" maxlength="50"></div>
+          <div class="f"><label>Crediti extra per tutti</label><input type="number" id="aExtra" value="0" min="0"></div>
+        </div>
+        <div class="btnrow"><button class="btn pri" id="btnApriAsta">Apri l'asta</button></div></div>`
+      : `<div class="card"><div class="ok-empty">Quando l'amministratore aprirà l'asta, la vedrai qui in diretta.</div></div>`}`;
+  }
+
+  const liberi = svincolati();
+  const trovati = astaCerca.length >= 2
+    ? liberi.filter(l => norm(l.nome).includes(norm(astaCerca))).slice(0, 10) : [];
+  const sel = astaSel ? liberi.find(l => l.nome === astaSel) : null;
+
+  const tabellone = S.squadre.map(s => {
+    const m = RUOLI.map(r => `${r}${slotMancanti(s,r)}`).filter(x => !x.endsWith("0")).join(" ");
+    return `<tr class="${io && s.id===io.squadra_id ? "me":""}">
+      <td>${esc(s.nome)}</td>
+      <td class="num">${s.crediti_residui}</td>
+      <td class="num">${slotMancanti(s)}</td>
+      <td class="num"><b>${massimoOfferibile(s)}</b></td>
+      <td style="color:var(--tx-faint);font-size:12.5px">${m || "rosa completa"}</td></tr>`;
+  }).join("");
+
+  const acquisti = (S.asta.acquisti||[]).slice().reverse().slice(0,25).map((a,i) => {
+    const vero = S.asta.acquisti.length - 1 - i;
+    const sq = S.squadre.find(s => s.id === a.squadra);
+    return `<tr><td style="color:var(--${a.ruolo})">${a.ruolo}</td><td>${esc(a.nome)}</td>
+      <td>${esc(sq?.nome || "—")}</td><td class="num">${a.prezzo}</td>
+      <td style="color:var(--tx-faint)">${esc(a.quando)}</td>
+      <td>${sonoAdmin() ? `<button class="btn" data-annullaacq="${vero}">Annulla</button>` : ""}</td></tr>`;
+  }).join("");
+
+  return `<div class="thead"><div><h2>${esc(S.asta.nome)}</h2>
+      <div class="pos">Aperta il ${esc(S.asta.apertaIl)} · ${liberi.length} svincolati disponibili</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v">${S.asta.acquisti.length}</div><div class="l">Assegnati</div></div>
+      <div class="stat"><div class="v">${S.squadre.reduce((n,s)=>n+slotMancanti(s),0)}</div><div class="l">Posti da riempire</div></div>
+    </div></div>
+    ${!S.listone.length ? `<div class="card" style="border-color:var(--warn)"><h3>Listone non caricato</h3>
+      <div class="hint" style="margin:0">Senza quotazioni ufficiali non so chi è svincolato. Importa il listone dalla scheda omonima.</div></div>` : ""}
+    ${sonoAdmin() ? `<div class="card"><h3>Assegna un giocatore</h3>
+      <div class="hint">Cerca fra gli svincolati, scegli la squadra e digita il prezzo battuto.</div>
+      <input type="search" id="aCerca" placeholder="cerca un giocatore svincolato" value="${esc(astaCerca)}" style="max-width:340px">
+      ${trovati.length ? `<div class="ris" style="max-width:340px;margin-top:6px">${trovati.map((l,i) =>
+        `<div class="rit" data-asta="${i}"><span class="rl" style="color:var(--${l.ruolo})">${l.ruolo}</span>
+          <span class="rn">${esc(l.nome)}<span class="rc">${esc(l.club)}</span></span>
+          <span class="rq">${l.qa ?? "—"}</span><span class="ro"><b>libero</b></span></div>`).join("")}</div>` : ""}
+      ${sel ? pannelloAssegna(sel) : ""}
+    </div>` : ""}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Situazione delle squadre</span><span class="c">crediti e posti</span></div>
+      <table><thead><tr><th>Squadra</th><th class="num">Crediti</th><th class="num">Posti</th>
+        <th class="num">Offerta max</th><th>Reparti scoperti</th></tr></thead><tbody>${tabellone}</tbody></table></div>
+    ${acquisti ? `<div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Assegnazioni</span><span class="c">${S.asta.acquisti.length}</span></div>
+      <table><thead><tr><th style="width:24px"></th><th>Giocatore</th><th>Squadra</th>
+        <th class="num">Prezzo</th><th>Ora</th><th></th></tr></thead><tbody>${acquisti}</tbody></table></div>` : ""}
+    ${sonoAdmin() ? `<div class="btnrow"><button class="btn dgr" id="btnChiudiAsta">Chiudi l'asta</button></div>` : ""}`;
+}
+
+function pannelloAssegna(l){
+  const righe = S.squadre.map((s,i) => {
+    const err = verificaAcquisto(s, l, minimoPer(s, l.nome));
+    const min = minimoPer(s, l.nome);
+    return `<tr class="${err?"nonpuo":""}">
+      <td>${esc(s.nome)}</td>
+      <td class="num">${s.crediti_residui}</td>
+      <td class="num">${slotMancanti(s, l.ruolo)}</td>
+      <td class="num">${min > 1 ? `<b style="color:var(--warn)">${min}</b>` : min}</td>
+      <td class="num">${massimoOfferibile(s)}</td>
+      <td>${err ? `<span class="owner">${esc(err.split(":")[0])}</span>`
+        : `<button class="btn pri" data-assegna="${i}">Assegna</button>`}</td></tr>`;
+  }).join("");
+  return `<div class="assegna">
+    <div class="ass-h"><span class="rl" style="color:var(--${l.ruolo})">${l.ruolo}</span>
+      <b>${esc(l.nome)}</b><span class="owner">${esc(l.club)} · quotazione ${l.qa ?? "—"}</span></div>
+    <div class="f" style="max-width:180px;margin:10px 0"><label>Prezzo battuto</label>
+      <input type="number" id="aPrezzo" min="1" value="1"></div>
+    <table><thead><tr><th>Squadra</th><th class="num">Crediti</th><th class="num">Slot ${l.ruolo}</th>
+      <th class="num">Minimo</th><th class="num">Max</th><th></th></tr></thead><tbody>${righe}</tbody></table>
+    <div class="hint" style="margin-top:9px">Il minimo in ambra segnala chi deve rilanciare perché lo aveva svincolato. La colonna Max tiene già da parte un credito per ogni altro posto ancora scoperto.</div>
+  </div>`;
+}
+
 function viewControlli(){
   const blocchi = S.squadre.map((s,i) => {
     const pb = problemi(s);
@@ -2601,6 +2773,41 @@ function bindView(){
   document.querySelectorAll("input.rule").forEach(inp => inp.onchange = () => {
     set(S, inp.dataset.path, +inp.value); save(); render();
   });
+
+  /* --- asta --- */
+  const aa = document.getElementById("btnApriAsta");
+  if(aa) aa.onclick = () => {
+    const nome = (document.getElementById("aNome").value||"").trim() || "Asta";
+    const extra = +document.getElementById("aExtra").value || 0;
+    conferma(`Aprire "${nome}"?`,
+      extra ? `Ogni squadra riceve ${extra} crediti in piu' prima di cominciare.`
+            : "Da qui registri le assegnazioni e tutti vedono rose e crediti aggiornarsi.",
+      () => { document.getElementById("modalHost").innerHTML = ""; apriAsta(nome, extra); toast("Asta aperta"); });
+  };
+  const ac = document.getElementById("aCerca");
+  if(ac) ac.oninput = deb(() => { astaCerca = ac.value; astaSel = null; render();
+    const n = document.getElementById("aCerca");
+    if(n){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 200);
+  document.querySelectorAll("[data-asta]").forEach(el => el.onclick = () => {
+    const liberi = svincolati().filter(l => norm(l.nome).includes(norm(astaCerca)));
+    const l = liberi[+el.dataset.asta];
+    if(l){ astaSel = l.nome; render(); }
+  });
+  document.querySelectorAll("[data-assegna]").forEach(el => el.onclick = () => {
+    const sq = S.squadre[+el.dataset.assegna];
+    const l = svincolati().find(x => x.nome === astaSel);
+    const prezzo = +document.getElementById("aPrezzo").value || 0;
+    const e = registraAcquisto(sq, l, prezzo);
+    if(e){ toast(e); return; }
+    astaSel = null; astaCerca = "";
+    save(); render(); toast(`${l.nome} a ${sq.nome} per ${prezzo}`);
+  });
+  document.querySelectorAll("[data-annullaacq]").forEach(el =>
+    el.onclick = () => annullaAcquisto(+el.dataset.annullaacq));
+  const ca2 = document.getElementById("btnChiudiAsta");
+  if(ca2) ca2.onclick = () => conferma("Chiudere l'asta?",
+    "Le rose restano come sono. L'asta finisce nello storico e potrai aprirne un'altra a febbraio.",
+    () => { document.getElementById("modalHost").innerHTML = ""; chiudiAsta(); toast("Asta chiusa"); });
 
   /* --- classifica --- */
   document.querySelectorAll("input.punti").forEach(inp => inp.onchange = () => {
