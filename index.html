@@ -162,6 +162,8 @@ tr:last-child td{border-bottom:none}
 .mhead h3{font-size:21px;font-weight:600}
 .mhead .s{font-size:12.5px;color:var(--tx-faint)}
 .mbody{padding:16px 20px}
+.mbody.bloccata .grid input,.mbody.bloccata .grid select{opacity:.55;pointer-events:none}
+.mbody.bloccata .card.sblocca input,.mbody.bloccata .card.sblocca select{opacity:1;pointer-events:auto}
 .mfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--raised);
@@ -438,7 +440,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "10 set · griglie";
+const APP_VERSION = "11 set · spostamenti";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -1740,6 +1742,10 @@ function validaNome(nuovo, idSquadra){
 function descriviAzione(a){
   const sq = S.squadre.find(s => s.id === a.squadra_id);
   const c = a.contenuto || {};
+  if(a.tipo === "sposta"){
+    const dove = { prima:"prima squadra", fuori_rosa:"vivaio come fuori rosa" }[c.a] || c.a;
+    return `${esc(sq?.nome || a.squadra_id)} vuole spostare <b>${esc(c.nome||"?")}</b> in ${dove}`;
+  }
   if(a.tipo === "aggiunta"){
     const dove = c.reparto === "prima" ? "prima squadra" : c.reparto === "primavera" ? `vivaio ${c.fascia||""}`.trim() : "fuori rosa";
     return `${esc(sq?.nome || a.squadra_id)} vuole inserire <b>${esc(c.nome||"?")}</b> `
@@ -1775,8 +1781,9 @@ function descriviAzione(a){
 function viewRichieste(){
   if(!sonoAdmin()) return viewRichiesteManager();
   const etichetta = { draft:"Scelta al draft", nome:"Cambio di nome",
-    riconferme:"Riconferme", annulla:"Annullamento riconferme", aggiunta:"Inserimento in rosa" };
-  const icona = { draft:"◆", nome:"✎", riconferme:"★", annulla:"↺", aggiunta:"+" };
+    riconferme:"Riconferme", annulla:"Annullamento riconferme", aggiunta:"Inserimento in rosa",
+    sposta:"Spostamento" };
+  const icona = { draft:"◆", nome:"✎", riconferme:"★", annulla:"↺", aggiunta:"+", sposta:"⇅" };
   const righe = azioni.map(a => `<div class="alert">
       <span class="ic" style="color:var(--info)">${icona[a.tipo] || "⇄"}</span>
       <span class="tx"><b>${etichetta[a.tipo] || "Proposta di scambio"}</b>
@@ -1804,6 +1811,20 @@ async function decidi(id, esito, motivo){
 async function applicaAzione(id){
   const a = azioni.find(x => x.id === id);
   if(!a) return;
+  if(a.tipo === "sposta"){
+    const dove = { prima:"prima squadra", fuori_rosa:"vivaio come fuori rosa" }[c.a] || c.a;
+    return `${esc(sq?.nome || a.squadra_id)} vuole spostare <b>${esc(c.nome||"?")}</b> in ${dove}`;
+  }
+  if(a.tipo === "sposta"){
+    const sq = S.squadre.find(s => s.id === a.squadra_id);
+    if(!sq){ toast("Squadra non trovata"); return; }
+    const p = sq.rosa.find(x => x.id === a.contenuto.giocatore);
+    const e = applicaSpostamento(sq, p, a.contenuto.a, a.contenuto.ruolo);
+    if(e){ toast(e); await decidi(id, "rifiutata", e); render(); return; }
+    await decidi(id, "accettata");
+    save(); render(); toast(`${p.nome} spostato`);
+    return;
+  }
   if(a.tipo === "aggiunta"){
     const sq = S.squadre.find(s => s.id === a.squadra_id);
     if(!sq){ toast("Squadra non trovata"); return; }
@@ -2369,6 +2390,57 @@ function apriInfoGiocatore(id){
   };
 }
 
+/* ================= SPOSTAMENTI FRA PRIMA SQUADRA E VIVAIO ================= */
+// il regolamento ammette tre movimenti: un giovane sale, un fuori rosa rientra,
+// un giocatore di prima squadra scende in vivaio come fuori rosa
+function spostamentiPossibili(p){
+  if(p.reparto === "prima")      return [{ a:"fuori_rosa", testo:"In vivaio come fuori rosa" }];
+  if(p.reparto === "primavera")  return [{ a:"prima",      testo:"Promuovi in prima squadra" }];
+  if(p.reparto === "fuori_rosa") return [{ a:"prima",      testo:"Rientro in prima squadra" }];
+  return [];
+}
+function notaSpostamento(p){
+  if(p.reparto === "primavera")
+    return `Salendo, il contratto riparte da ${S.regole.durataPrima} stagioni con decorrenza 1/09.`;
+  if(p.reparto === "fuori_rosa")
+    return "Rientrando, il contratto resta quello che ha adesso.";
+  return "Scendendo occupa uno slot del vivaio e mantiene il suo contratto.";
+}
+
+// controlla che ci sia posto dove il giocatore vuole andare
+function verificaSpostamento(sq, p, a, ruolo){
+  if(!p) return "Giocatore non trovato";
+  if(!spostamentiPossibili(p).some(o => o.a === a)) return "Spostamento non ammesso dal regolamento";
+  if(a === "prima"){
+    const r = p.ruolo || ruolo;
+    if(!r) return "Serve il ruolo per sapere in quale reparto va";
+    const lim = S.regole.rosa[r];
+    if(lim == null) return "Ruolo non valido";
+    if(reparto(sq, r).length >= lim)
+      return `${RUOLO_NOME[r]} già al completo: ${lim} su ${lim}`;
+  } else {
+    if(occupatiVivaio(sq) >= S.regole.slotPrimavera)
+      return `Vivaio già pieno: ${S.regole.slotPrimavera} slot su ${S.regole.slotPrimavera}`;
+  }
+  return null;
+}
+
+function applicaSpostamento(sq, p, a, ruolo){
+  const err = verificaSpostamento(sq, p, a, ruolo);
+  if(err) return err;
+  const daPrimavera = p.reparto === "primavera";
+  p.reparto = a;
+  if(a === "prima"){
+    if(!p.ruolo && ruolo) p.ruolo = ruolo;    // i giovani importati spesso non ce l'hanno
+    p.fascia = null;
+    // solo chi sale dal vivaio fa ripartire il contratto; il fuori rosa lo conserva
+    if(daPrimavera) p.scadenza = `${S.annoStagione + S.regole.durataPrima}-09-01`;
+  } else {
+    p.fascia = null;
+  }
+  return null;
+}
+
 function viewControlli(){
   const blocchi = S.squadre.map((s,i) => {
     const pb = problemi(s);
@@ -2702,16 +2774,25 @@ function openPlayer(id){
   const html = `<div class="scrim" id="scrim"><div class="modal">
     <div class="mhead"><h3>${isNew ? "Nuovo giocatore" : esc(p.nome)}</h3>
       <div class="s">${esc(sq.nome)}${!isNew && a !== null ? " · " + (a > 0 ? a + " stagioni residue" : "contratto scaduto") : ""}</div></div>
-    <div class="mbody">
-      ${soloLettura ? `<div class="banner">Stai guardando la rosa: le modifiche ai giocatori le applica l'amministratore. Per uno scambio usa la scheda Scambi.</div>` : ""}
-      ${(!isNew && !miaSquadraQuesta) ? `<div class="card" style="padding:12px 14px;margin-bottom:14px">
+    <div class="mbody ${soloLettura?"bloccata":""}">
+      ${soloLettura ? `<div class="banner">Stai guardando la rosa: i dati del giocatore li modifica l'amministratore. Qui sotto puoi chiedere quello che il regolamento ti consente.</div>` : ""}
+      ${(!isNew && !miaSquadraQuesta) ? `<div class="card sblocca" style="padding:12px 14px;margin-bottom:14px">
         <div style="font-size:13px;color:var(--tx-dim);margin-bottom:8px">
           ${ePreferito(p.id) ? "È nella tua lista dei desiderati." : "Seguilo per ritrovarlo nella scheda Mercato."}</div>
         <div class="btnrow">
           <button class="btn" id="mCuore">${ePreferito(p.id) ? "♥ Togli dai desiderati" : "♡ Aggiungi ai desiderati"}</button>
           <button class="btn" id="mInfoG">Chiedi informazioni</button>
         </div></div>` : ""}
-      ${(!isNew && miaSquadraQuesta) ? `<div class="card" style="padding:12px 14px;margin-bottom:14px">
+      ${(!isNew && miaSquadraQuesta && !sonoAdmin() && spostamentiPossibili(p).length) ? `<div class="card sblocca" style="padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:13px;color:var(--tx-dim);margin-bottom:8px">Puoi chiedere all'amministratore di spostarlo.</div>
+        <div class="f" style="margin-bottom:9px"><label>Dove</label>
+          <select id="mSposta">${spostamentiPossibili(p).map(o => `<option value="${o.a}">${o.testo}</option>`).join("")}</select></div>
+        ${(!p.ruolo && spostamentiPossibili(p).some(o => o.a === "prima")) ? `<div class="f" style="margin-bottom:9px">
+          <label>Ruolo, non ancora registrato</label>
+          <select id="mSpostaRuolo">${RUOLI.map(r => `<option value="${r}">${RUOLO_NOME[r]}</option>`).join("")}</select></div>` : ""}
+        <button class="btn pri" id="mChiediSposta">Invia la richiesta</button>
+        <div class="hint" style="margin:9px 0 0">${notaSpostamento(p)}</div></div>` : ""}
+      ${(!isNew && miaSquadraQuesta) ? `<div class="card sblocca" style="padding:12px 14px;margin-bottom:14px">
         <div style="font-size:13px;color:var(--tx-dim);margin-bottom:8px">
           ${inVetrina(p.id) ? "Questo giocatore è in vetrina: gli altri manager lo vedono fra i cedibili."
                             : "Mettilo in vetrina per far sapere agli altri che lo cedi."}</div>
@@ -2757,6 +2838,14 @@ function openPlayer(id){
   document.getElementById("mAnnulla").onclick = close;
   document.getElementById("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
 
+  const cs = document.getElementById("mChiediSposta");
+  if(cs) cs.onclick = async () => {
+    const a = document.getElementById("mSposta").value;
+    const rs = document.getElementById("mSpostaRuolo");
+    if(await inviaAzione("sposta", { giocatore: p.id, nome: p.nome, a, ruolo: rs ? rs.value : null })){
+      close(); toast("Richiesta inviata all'amministratore");
+    }
+  };
   const cu = document.getElementById("mCuore");
   if(cu) cu.onclick = async () => {
     const ok = ePreferito(p.id) ? await togliPreferito(p.id) : await segnaPreferito(p, sq);
@@ -2853,15 +2942,16 @@ function openPlayer(id){
   const pr = document.getElementById("mPromuovi");
   if(pr) pr.onclick = () => {
     const era = p.reparto;
-    p.reparto = "prima"; p.fascia = null;
-    // il contratto riparte solo se arriva dalla primavera; il fuori rosa lo mantiene
-    if(era === "primavera") p.scadenza = `${S.annoStagione + S.regole.durataPrima}-09-01`;
+    const r = p.ruolo || document.getElementById("mRuolo").value;
+    const e = applicaSpostamento(sq, p, "prima", r);
+    if(e){ toast(e); return; }
     save(); close(); render();
     toast(era === "primavera" ? `${p.nome} promosso, contratto ripartito da ${S.regole.durataPrima} stagioni` : `${p.nome} rientra in prima squadra col contratto invariato`);
   };
   const rt = document.getElementById("mRetrocedi");
   if(rt) rt.onclick = () => {
-    p.reparto = "fuori_rosa"; p.fascia = null;
+    const e = applicaSpostamento(sq, p, "fuori_rosa");
+    if(e){ toast(e); return; }
     save(); close(); render();
     toast(`${p.nome} in vivaio come fuori rosa, contratto invariato`);
   };
