@@ -440,7 +440,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "11 set · spostamenti";
+const APP_VERSION = "11 set · permessi";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -769,9 +769,16 @@ function render(){
   document.getElementById("leagueName").textContent = "Fantamanager";
   document.getElementById("seasonLbl").textContent = `${S.annoStagione}/${String(S.annoStagione+1).slice(2)}`;
   document.getElementById("teamCount").textContent = `${S.squadre.length} squadre`;
-  const bp = document.getElementById("btnPrev");
-  bp.disabled = !(S.archivio && S.archivio.length);
-  bp.title = bp.disabled ? "Nessuna stagione precedente archiviata" : "Torna alla stagione precedente";
+  const bp = document.getElementById("btnPrev"), bn = document.getElementById("btnNext");
+  bp.disabled = !(S.archivio && S.archivio.length) || !sonoAdmin();
+  bp.title = sonoAdmin() ? (bp.disabled ? "Nessuna stagione precedente archiviata" : "Torna alla stagione precedente")
+                         : "Il cambio stagione lo fa l'amministratore";
+  bn.disabled = !sonoAdmin();
+  bn.title = sonoAdmin() ? "Stagione successiva" : "Il cambio stagione lo fa l'amministratore";
+  ["btnImport","btnReset"].forEach(k => {
+    const el = document.getElementById(k);
+    if(el) el.classList.toggle("hidden", !sonoAdmin());
+  });
   const led = document.getElementById("led"), stx = document.getElementById("syncTx");
   led.className = "led " + (collegato ? "on" : "off");
   stx.textContent = (collegato
@@ -1187,6 +1194,8 @@ function tabellaListone(righe, conProprietario){
 }
 
 function zonaImport(sostituisci){
+  if(!sonoAdmin()) return sostituisci ? "" : `<div class="card"><div class="ok-empty">
+    Le quotazioni ufficiali le carica l'amministratore. Appena lo fa, listone e svincolati compaiono qui.</div></div>`;
   const forzate = S.squadre.reduce((n,s) => n + s.rosa.filter(p => p.quotazione != null).length, 0);
   return `<div class="card"><h3>${sostituisci ? "Carica un listone aggiornato" : "Carica le quotazioni ufficiali"}</h3>
     <div class="hint">Su fantacalcio.it, nella pagina Quotazioni e FVM, il pulsante "Scarica" produce un file Excel. Trascinalo qui, oppure premi il pulsante per sceglierlo. Ruoli, club e quotazioni vengono letti da lì, così restano sempre allineati alla fonte.${sostituisci ? " Il listone attuale viene sostituito solo se il nuovo file è leggibile." : ""}</div>
@@ -2456,9 +2465,12 @@ function viewControlli(){
 
 function viewRegole(){
   const r = S.regole;
-  const num = (l,path,extra="") => `<div class="f"><label>${l}</label><input type="number" class="rule" data-path="${path}" value="${get(S,path)}" ${extra}></div>`;
+  const bloc = sonoAdmin() ? "" : "disabled";
+  const num = (l,path,extra="") => `<div class="f"><label>${l}</label><input type="number" class="rule" data-path="${path}" value="${get(S,path)}" ${extra} ${bloc}></div>`;
   return `<div class="thead"><div><h2>Regolamento</h2>
-    <div class="pos">Ogni valore è modificabile: i controlli e i calcoli si aggiornano subito.</div></div></div>
+    <div class="pos">${sonoAdmin()
+      ? "Ogni valore è modificabile: i controlli e i calcoli si aggiornano subito."
+      : "Le regole della lega. Le imposta l'amministratore, qui puoi solo consultarle."}</div></div></div>
     <div class="card"><h3>Rosa e vivaio</h3>
       <div class="hint">Composizione della prima squadra e capienza del settore giovanile, fuori rosa inclusi.</div>
       <div class="grid g4">
@@ -2475,7 +2487,7 @@ function viewRegole(){
         ${num("Durata prima squadra","regole.durataPrima")}
         ${num("Durata U23","regole.durataPrimavera.U23")}${num("Durata U22","regole.durataPrimavera.U22")}
         ${num("Durata U21","regole.durataPrimavera.U21")}${num("Durata U20","regole.durataPrimavera.U20")}
-        <div class="f"><label>Anno stagione in corso</label><input type="number" class="rule" data-path="annoStagione" value="${S.annoStagione}"></div>
+        <div class="f"><label>Anno stagione in corso</label><input type="number" class="rule" data-path="annoStagione" value="${S.annoStagione}" ${bloc}></div>
       </div></div>
     <div class="card"><h3>Riconferme per posizione</h3>
       <div class="hint">Chi vince ne ha meno. Dalla quarta in giù vale il valore predefinito.</div>
@@ -2487,13 +2499,13 @@ function viewRegole(){
       <div class="hint">Il pareggio dei ruoli obbliga ogni reparto della prima squadra a restare invariato. Le picks sono generate per le annate a venire, un giro per ogni slot del vivaio.</div>
       <div class="grid g4">
         <div class="f"><label>Pareggio dei ruoli</label>
-          <select id="togglePareggio"><option value="1" ${r.pareggioRuoli?"selected":""}>Obbligatorio</option>
+          <select id="togglePareggio" ${bloc}><option value="1" ${r.pareggioRuoli?"selected":""}>Obbligatorio</option>
             <option value="0" ${!r.pareggioRuoli?"selected":""}>Libero</option></select></div>
         ${num("Annate di picks","regole.stagioniPick")}${num("Giri per annata","regole.giriPick")}
         <div class="f"><label>Picks in circolazione</label><input value="${S.picks.length}" disabled></div>
       </div>
-      <div class="btnrow"><button class="btn" id="btnRigeneraPicks">Rigenera le picks</button></div>
-      <div class="hint" style="margin:10px 0 0">Rigenerando, ogni squadra torna proprietaria delle proprie picks: gli scambi di picks già fatti vengono annullati.</div></div>
+      ${sonoAdmin() ? `<div class="btnrow"><button class="btn" id="btnRigeneraPicks">Rigenera le picks</button></div>
+      <div class="hint" style="margin:10px 0 0">Rigenerando, ogni squadra torna proprietaria delle proprie picks: gli scambi di picks già fatti vengono annullati.</div>` : ""}</div>
     <div class="card"><h3>Probabilità della prima scelta al draft</h3>
       <div class="hint">Percentuali di partenza per le posizioni dalla quarta alla decima. Dopo ogni estrazione i pesi rimasti vengono rinormalizzati, così nessuno ha la prima scelta garantita.</div>
       <div class="grid g4">
