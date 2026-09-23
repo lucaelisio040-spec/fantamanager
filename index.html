@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "23 set · ricomincia draft";
+const APP_VERSION = "23 set · fasce per età";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -873,6 +873,9 @@ function legendaFasce(anno, extra){
 
 function problemi(sq){
   const out = [];
+  const sn = senzaNascita(sq).length;
+  if(sn) out.push({ lv:"warn", t:`${sn} giovani senza anno di nascita`,
+    d:"Senza l'età la fascia dell'anno prossimo non è certa: inseriscilo nel riquadro Anni di nascita" });
   RUOLI.forEach(r => {
     const n = reparto(sq,r).length, lim = S.regole.rosa[r];
     if(n !== lim) out.push({ lv: n > lim ? "bad":"warn", t:`${RUOLO_NOME[r]}: ${n} su ${lim}`, d: n>lim ? "Reparto oltre il limite" : "Reparto incompleto" });
@@ -1264,7 +1267,7 @@ function apriScelta(pickId){
         <div class="f" style="grid-column:1/-1"><label>Nome del giocatore</label><input id="dNome" placeholder="anche fuori listone"></div>
         <div class="f"><label>Ruolo</label><select id="dRuolo">${RUOLI.map(r => `<option value="${r}">${RUOLO_NOME[r]}</option>`).join("")}</select></div>
         <div class="f"><label>Club</label><input id="dClub"></div>
-        <div class="f"><label>Anno di nascita</label><input type="number" id="dNato" min="${anno-25}" max="${anno-15}" placeholder="es. ${anno-20}"></div>
+        <div class="f"><label>Anno di nascita, obbligatorio</label><input type="number" id="dNato" min="${anno-25}" max="${anno-15}" placeholder="es. ${anno-20}"></div>
         <div class="f"><label>Fascia</label><select id="dFascia">${FASCE.map(f => `<option>${f}</option>`).join("")}</select></div>
       </div>
       <div class="hint" id="dInfo" style="margin:12px 0 0"></div>
@@ -1286,6 +1289,7 @@ function apriScelta(pickId){
   $("dSi").onclick = async () => {
     const nome = $("dNome").value.trim();
     if(!nome){ toast("Serve il nome del giocatore"); return; }
+    if(!$("dNato").value){ toast("Serve l'anno di nascita: è lui a stabilire fascia e durata del contratto"); return; }
     const f = $("dFascia").value;
     const dur = S.regole.durataPrimavera[f] ?? 3;
     const dati = { pickId: pk.id, nome, ruolo:$("dRuolo").value, club:$("dClub").value.trim(),
@@ -1575,8 +1579,13 @@ function fasciaEsatta(p, anno){
 function fasciaAvanzata(p, nuovoAnno){
   const esatta = fasciaEsatta(p, nuovoAnno);
   if(esatta) return esatta;
-  return ({ U20:"U21", U21:"U22", U22:"U23", U23:"U23" })[p.fascia] || p.fascia;
+  // U21, U22 e U23 sono un'eta precisa: l'anno dopo si sale di uno.
+  // U20 vuol dire "20 anni o meno": senza anno di nascita non si puo sapere se sale,
+  // quindi resta U20 e viene segnalato come eta da confermare
+  return ({ U21:"U22", U22:"U23", U23:"U23" })[p.fascia] || p.fascia;
 }
+const etaIncerta = p => p.reparto === "primavera" && !p.nato && (!p.fascia || p.fascia === "U20");
+const senzaNascita = sq => sq.rosa.filter(p => p.reparto === "primavera" && !p.nato);
 
 function archivia(){
   S.archivio = S.archivio || [];
@@ -1600,6 +1609,7 @@ function avanzaStagione(){
     sq.rosa.forEach(p => {
       if(p.reparto === "primavera"){
         const prima = p.fascia;
+        if(etaIncerta(p)) report.incerti = (report.incerti || []).concat(`${p.nome} (${sq.nome})`);
         p.fascia = fasciaAvanzata(p, nuovo);
         if(prima === "U23" && p.fascia === "U23") report.oltreFascia.push(`${p.nome} (${sq.nome})`);
       }
@@ -1620,7 +1630,7 @@ function avanzaStagione(){
   if(report.scaduti.length) pezzi.push(`${report.scaduti.length} contratti conclusi`);
   pezzi.push(`crediti riportati a ${S.regole.budget}`);
   toast(pezzi.join(" · "));
-  if(report.scaduti.length) mostraReport(nuovo, report);
+  if(report.scaduti.length || (report.incerti||[]).length) mostraReport(nuovo, report);
 }
 
 function mostraReport(anno, r){
@@ -1633,6 +1643,8 @@ function mostraReport(anno, r){
     <div class="mbody">
       <h3 style="font-size:15px;margin-bottom:6px">Contratti conclusi, giocatori liberati</h3>${lista(r.scaduti)}
       ${r.oltreFascia.length ? `<h3 style="font-size:15px;margin:14px 0 6px">Fuori fascia nel vivaio</h3>${lista(r.oltreFascia)}` : ""}
+      ${(r.incerti||[]).length ? `<h3 style="font-size:15px;margin:14px 0 6px">Rimasti U20 perché manca l'anno di nascita</h3>
+        <div class="hint" style="margin-bottom:6px">Inseriscilo dalla scheda Controlli: la fascia verrà ricalcolata dall'età.</div>${lista(r.incerti)}` : ""}
     </div>
     <div class="mfoot"><button class="btn pri" id="mChiudi">Ho capito</button></div></div></div>`;
   document.getElementById("mChiudi").onclick = () => document.getElementById("modalHost").innerHTML = "";
@@ -3446,11 +3458,12 @@ function viewRiconfermeP(){
       <td style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</td>
       <td>${esc(p.nome)}</td>
       <td>${esc(p.fascia||"—")}</td>
-      <td>${esc(fasciaProssima(p)||"—")}</td>
+      <td>${etaIncerta(p) ? `<span style="color:var(--warn)">U20 o U21?</span>` : esc(fasciaProssima(p)||"—")}</td>
       <td data-v="${a ?? -1}">${a == null ? "—" : a <= 1 ? "in scadenza" : `${a} → ${a-1}`}</td>
       <td style="color:var(--tx-faint);font-size:12.5px">${ok ? "" : "non riconfermabile"}</td></tr>`;
   }).join("");
   return testa(`${esc(sq.nome)} · gratuita, il contratto resta quello che è`, stat(scelti.length, "Scelti") + fasceStat)
+    + (giovani.some(etaIncerta) ? `<div class="banner" style="border-left-color:var(--warn)">${giovani.filter(etaIncerta).length} dei tuoi U20 non hanno l'anno di nascita: non si sa se l'anno prossimo saranno U20 o U21. Per il limite non cambia nulla, perché U20 e U21 contano insieme, ma chiedi all'amministratore di inserirlo.</div>` : "")
     + `<div class="banner">${miaSceltaP ? "Scelta consegnata. Puoi ancora cambiarla finché l'amministratore non svela."
          : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
     ${giovani.length ? `<div class="card" style="padding:0;overflow:hidden">
@@ -3466,6 +3479,31 @@ function viewRiconfermeP(){
     <div class="hint" style="margin-top:10px;max-width:70ch">Consegnando senza spuntare nessuno, tutti i tuoi giovani tornano liberi. I fuori rosa non sono coinvolti.</div>`;
 }
 
+let nasciteTutti = false;
+function pannelloNascite(){
+  const righe = [];
+  S.squadre.forEach(sq => sq.rosa.forEach(p => {
+    if(p.reparto !== "primavera") return;
+    if(!nasciteTutti && p.nato && p.ruolo) return;
+    righe.push({ sq, p });
+  }));
+  const mancano = S.squadre.reduce((n, sq) => n + senzaNascita(sq).length, 0);
+  if(!mancano && !nasciteTutti) return "";
+  const a = S.annoStagione;
+  return `<div class="card"><h3>Anni di nascita del vivaio</h3>
+    <div class="hint">La fascia si calcola dall'anno di nascita: nella stagione ${a}/${String(a+1).slice(2)} è U23 chi è nato nel ${a-23}, U22 nel ${a-22}, U21 nel ${a-21}, U20 nel ${a-20} o dopo. Senza, un U20 non si sa se l'anno prossimo resta U20 o diventa U21. ${mancano ? `Ne mancano <b>${mancano}</b>.` : ""}</div>
+    ${sonoAdmin() ? `<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px">
+      <table><thead><tr><th>Squadra</th><th>Giocatore</th><th>Fascia ora</th><th>Anno di nascita</th><th>Ruolo</th></tr></thead>
+      <tbody>${righe.map(({ sq, p }) => `<tr><td>${esc(sq.nome)}</td><td>${esc(p.nome)}${p.club ? ` <span class="owner">${esc(p.club)}</span>` : ""}</td>
+        <td data-v="${({U20:20,U21:21,U22:22,U23:23})[p.fascia] || 0}">${esc(p.fascia || "—")}</td>
+        <td><input type="number" class="nato" data-pl="${p.id}" value="${p.nato ?? ""}" min="${a-26}" max="${a-14}" placeholder="es. ${a-19}" style="width:96px"></td>
+        <td><select class="nruolo" data-pl="${p.id}"><option value="">—</option>
+          ${RUOLI.map(r => `<option value="${r}" ${p.ruolo===r?"selected":""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div>
+      <div class="btnrow"><button class="btn pri" id="btnSalvaNascite">Salva e ricalcola le fasce</button>
+        <button class="btn" id="btnNasciteTutti">${nasciteTutti ? "Mostra solo quelli da completare" : "Mostra tutti i giovani"}</button></div>`
+    : `<div class="ok-empty">Li inserisce l'amministratore.</div>`}</div>`;
+}
+
 function viewControlli(){
   const blocchi = S.squadre.map((s,i) => {
     const pb = problemi(s);
@@ -3476,6 +3514,7 @@ function viewControlli(){
   }).join("");
   return `<div class="thead"><div><h2>Controlli</h2>
     <div class="pos">Ogni squadra viene confrontata con il regolamento a ogni modifica.</div></div></div>
+    ${pannelloNascite()}
     ${blocchi || `<div class="card"><div class="ok-empty">Nessuna anomalia. Tutte le rose rispettano limiti di reparto, slot vivaio e scadenze.</div></div>`}`;
 }
 
@@ -3746,6 +3785,29 @@ function bindView(){
   if(ca2) ca2.onclick = () => conferma("Chiudere l'asta?",
     "Le rose restano come sono. L'asta finisce nello storico e potrai aprirne un'altra a febbraio.",
     () => { document.getElementById("modalHost").innerHTML = ""; chiudiAsta(); toast("Asta chiusa"); });
+
+  /* --- anni di nascita del vivaio --- */
+  const bsn = document.getElementById("btnSalvaNascite");
+  if(bsn) bsn.onclick = () => {
+    const a = S.annoStagione; let n = 0, cambiate = [];
+    document.querySelectorAll("input.nato").forEach(inp => {
+      const p = findPlayer(inp.dataset.pl); if(!p) return;
+      const v = inp.value === "" ? null : +inp.value;
+      if(v && (v < a - 30 || v > a - 12)) return;          // anno palesemente sbagliato: lo ignoro
+      if(v !== (p.nato ?? null)){ p.nato = v; n++;
+        const f = fasciaEsatta(p, a);
+        if(f && f !== p.fascia){ cambiate.push(`${p.nome} ${p.fascia || "—"} → ${f}`); p.fascia = f; } }
+    });
+    document.querySelectorAll("select.nruolo").forEach(sel => {
+      const p = findPlayer(sel.dataset.pl);
+      if(p && sel.value && sel.value !== p.ruolo){ p.ruolo = sel.value; n++; }
+    });
+    save(); render();
+    toast(n ? `${n} dati salvati${cambiate.length ? `, ${cambiate.length} fasce corrette` : ""}` : "Nessuna modifica");
+    if(cambiate.length) setTimeout(() => toast("Fasce corrette: " + cambiate.slice(0,4).join(", ") + (cambiate.length > 4 ? "…" : "")), 2800);
+  };
+  const bnt = document.getElementById("btnNasciteTutti");
+  if(bnt) bnt.onclick = () => { nasciteTutti = !nasciteTutti; render(); };
 
   /* --- classifica ufficiale e albo --- */
   const bu = document.getElementById("btnUfficiale");
