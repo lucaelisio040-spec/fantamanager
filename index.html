@@ -102,6 +102,15 @@ tr.me td{background:#17222E}
 .row .nm span{color:var(--tx-faint);font-size:12px;margin-left:6px}
 .row .pz{text-align:right;font-size:13px;color:var(--tx-dim)}
 .row .fl{text-align:center;font-size:12px}
+.row.thr{cursor:default;padding-top:4px;padding-bottom:4px;background:var(--bg)}
+.row.thr:hover{background:var(--bg)}
+.ordk{font-size:11px;color:var(--tx-faint);cursor:pointer;user-select:none;white-space:nowrap}
+.row.thr .ordk:nth-child(3),.row.thr .ordk:nth-child(4){text-align:right}
+.row.thr .ordk:nth-child(1),.row.thr .ordk:nth-child(5){text-align:center}
+.ordk:hover,.ordk.on{color:var(--tx)}
+th.ordth{cursor:pointer;user-select:none}
+th.ordth:hover{color:var(--tx)}
+th.ordth::after{content:attr(data-freccia);margin-left:4px;font-size:10px}
 .row.empty{color:var(--tx-faint);font-style:italic;cursor:default}
 .row.empty:hover{background:none}
 .row.eccedenza{background:#2A1614;box-shadow:inset 3px 0 0 var(--bad)}
@@ -279,6 +288,74 @@ tr:last-child td{border-bottom:none}
 .ass-h b{font-size:16px}
 tr.nonpuo td{opacity:.42}
 
+
+/* ---------- sala del draft ---------- */
+.sala{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:16px 18px;margin:16px 0}
+.sala-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.sala-h h3{font-size:18px;font-weight:600;text-transform:uppercase}
+.sala-turno{text-align:center;padding:22px 14px;margin:6px 0 14px;border-radius:8px;
+  background:radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, var(--col) 38%, transparent), var(--bg) 70%);
+  border:1px solid color-mix(in srgb, var(--col) 55%, var(--line))}
+.sala-turno.fine{--col:var(--good)}
+.st-n{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-dim)}
+.st-sq{font-family:'Barlow Condensed';font-size:40px;font-weight:700;text-transform:uppercase;line-height:1.05;margin:4px 0}
+.st-stato{display:inline-block;font-size:12.5px;padding:3px 11px;border-radius:12px;border:1px solid var(--line);color:var(--tx-faint)}
+.st-stato.on{border-color:var(--good);color:#8FD97C}
+@media(prefers-reduced-motion:no-preference){ .st-stato.on{animation:pulsa 1.6s ease-in-out infinite} }
+@keyframes pulsa{50%{box-shadow:0 0 0 5px rgba(99,190,79,.14)}}
+.btn.grande{font-size:15px;padding:10px 22px}
+.sala-liste{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
+.sl-t{font-size:11.5px;color:var(--tx-faint);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
+.sl-r{font-size:13px;padding:3px 0;border-bottom:1px solid var(--line-soft);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl-r b{font-family:'Barlow Condensed';display:inline-block;min-width:24px;color:var(--tx-faint)}
+.pcell.attuale{background:#1A2B38;box-shadow:inset 3px 0 0 var(--info)}
+
+/* ---------- palco dell'annuncio ---------- */
+.palco{position:fixed;inset:0;z-index:400;display:grid;place-items:center;overflow:hidden;
+  background:radial-gradient(90% 70% at 50% 30%, color-mix(in srgb, var(--col) 30%, #0A0F16) 0%, #06090D 70%)}
+.luce{position:absolute;top:-30%;left:50%;width:70vmin;height:140vmin;transform:translateX(-50%);
+  background:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 75%);
+  clip-path:polygon(40% 0,60% 0,100% 100%,0 100%);pointer-events:none}
+.palco-in{position:relative;text-align:center;padding:24px;max-width:760px;width:100%}
+.p-testa{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:18px}
+.p-riga{font-family:'Barlow Condensed';text-transform:uppercase;color:#fff;line-height:1.05}
+.p1{font-size:clamp(24px,5vw,44px);font-weight:500}
+.p1 b{font-weight:700;color:var(--col);filter:brightness(1.5)}
+.p2{font-size:clamp(20px,3.6vw,30px);font-weight:500;color:rgba(255,255,255,.8);margin-top:8px}
+.p-sq{font-weight:700;color:#fff}
+.p-rivela{margin-top:22px}
+.maglia{width:min(230px,52vw);height:auto;display:block;margin:0 auto;filter:drop-shadow(0 18px 30px rgba(0,0,0,.6))}
+.p-nome{font-family:'Barlow Condensed';font-size:clamp(40px,9vw,86px);font-weight:700;text-transform:uppercase;
+  color:#fff;line-height:.95;margin-top:10px;text-shadow:0 4px 24px rgba(0,0,0,.6)}
+.p-info{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.p-chip{font-size:13px;color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:3px 12px}
+.p-chiudi{margin-top:26px;color:rgba(255,255,255,.6);font-size:13px;border:1px solid rgba(255,255,255,.2);
+  border-radius:6px;padding:6px 16px}
+.p-chiudi:hover{color:#fff;border-color:#fff}
+.p1,.p2,.p-rivela,.p-chiudi{opacity:0;animation:entra .7s ease-out forwards}
+.p1{animation-delay:.25s}.p2{animation-delay:1.7s}.p-rivela{animation-delay:3.4s}.p-chiudi{animation-delay:4.4s}
+@keyframes entra{to{opacity:1}}
+@media(prefers-reduced-motion:no-preference){
+  .p1,.p2{transform:translateY(14px);animation-name:sale}
+  .p-rivela{transform:scale(.7) rotateY(80deg);animation:gira .9s cubic-bezier(.2,.8,.2,1) 3.4s forwards}
+  .luce{animation:oscilla 5s ease-in-out infinite alternate}
+}
+@keyframes sale{to{opacity:1;transform:none}}
+@keyframes gira{to{opacity:1;transform:none}}
+@keyframes oscilla{from{transform:translateX(-58%) rotate(-4deg)}to{transform:translateX(-42%) rotate(4deg)}}
+
+/* ---------- albo della lega ---------- */
+.recs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.rec{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:11px 13px}
+.rec-t{font-size:11.5px;color:var(--tx-faint)}
+.rec-v{font-family:'Barlow Condensed';font-size:19px;font-weight:600;text-transform:uppercase;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec-d{font-size:12px;color:var(--tx-dim)}
+.mini-trf svg{width:13px;height:16px;vertical-align:-3px;margin-right:4px}
+.linksq{font:inherit;color:inherit;padding:0;text-align:left}
+.linksq:hover{color:var(--info);text-decoration:underline}
+
 /* ---------- profilo squadra ---------- */
 .titolosq{font:inherit;color:inherit;padding:0;border-bottom:2px solid transparent}
 .titolosq:hover{border-bottom-color:var(--info)}
@@ -384,6 +461,10 @@ tr.nonpuo td{opacity:.42}
   .cedgrid{grid-template-columns:1fr}
   .prefgrid{grid-template-columns:1fr}
   .bacheca{gap:7px}
+  .recs{grid-template-columns:1fr 1fr}
+  .sala{padding:13px 14px}
+  .st-sq{font-size:30px}
+  .sala-liste{grid-template-columns:1fr}
   .trf{width:28px;height:34px}
   .trf-n{font-size:22px}
   .segmenti{display:flex;width:100%}
@@ -430,6 +511,7 @@ tr.nonpuo td{opacity:.42}
       <button id="btnImport">Importa</button>
       <button id="btnReset">Ripristina</button>
       <button id="btnInstalla" class="hidden">Installa l'app</button>
+      <button id="btnEsci">Esci</button>
       <input type="file" id="fileIn" accept="application/json" class="hidden">
     </div>
   </aside>
@@ -446,6 +528,7 @@ tr.nonpuo td{opacity:.42}
       <button class="tab" data-tab="picks">Picks</button>
       <button class="tab" data-tab="classifica">Classifica</button>
       <button class="tab" data-tab="storico">Storico</button>
+      <button class="tab" data-tab="albo">Albo</button>
       <button class="tab" data-tab="listone">Listone</button>
       <button class="tab" data-tab="svincolati">Svincolati</button>
       <button class="tab" data-tab="controlli">Controlli</button>
@@ -466,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "12 set · profilo squadra";
+const APP_VERSION = "23 set · draft dal vivo";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -491,6 +574,24 @@ let sel = 0;               // squadra selezionata
 let tab = "rosa";
 const KEY = "fantamanager:v1";
 const CODICE_KEY = "fantamanager:codice";
+
+// sul sito pubblicato window.storage non esiste: senza questo ripiego il codice
+// non veniva mai ricordato e l'app chiedeva di rientrare a ogni apertura
+const archivio = {
+  async get(k){
+    if(window.storage && window.storage.get) return await window.storage.get(k);
+    const v = localStorage.getItem(k);
+    return v == null ? null : { value: v };
+  },
+  async set(k, v){
+    if(window.storage && window.storage.set) return await window.storage.set(k, v);
+    localStorage.setItem(k, v);
+  },
+  async del(k){
+    if(window.storage && window.storage.delete) return await window.storage.delete(k);
+    localStorage.removeItem(k);
+  }
+};
 
 /* ================= COLLEGAMENTO ================= */
 const SUPA_URL = "https://vtzruiplnoycwequhvay.supabase.co";
@@ -518,7 +619,7 @@ async function entra(cod){
   if(error) throw error;
   if(!data || !data.length) throw new Error("Codice non riconosciuto");
   codice = cod; io = data[0];
-  try{ await window.storage.set(CODICE_KEY, cod); }catch(e){}
+  try{ await archivio.set(CODICE_KEY, cod); }catch(e){}
   return io;
 }
 
@@ -557,11 +658,12 @@ function ascolta(){
       if(sonoAdmin()) return;                 // l'admin è la fonte, non si riallinea a sé stesso
       const nuovo = await scaricaStato();
       if(nuovo){ S = nuovo; await caricaConsegne(); await caricaMiaScelta(); render();
-                 toast("Dati aggiornati dall'amministratore"); }
+                 if(live() && live().annuncio) controllaAnnuncio();
+                 else toast("Dati aggiornati dall'amministratore"); }
     })
     .on("postgres_changes", { event:"*", schema:"public", table:"azioni" }, async () => {
       await caricaAzioni();
-      if(sonoAdmin()) render();
+      if(sonoAdmin()){ await autoApplicaDraft(); render(); }
     })
     .on("postgres_changes", { event:"*", schema:"public", table:"mercato" }, async () => {
       await caricaMercato();
@@ -576,7 +678,7 @@ function ascolta(){
 
 async function load(){
   try{
-    const r = await window.storage.get(KEY);
+    const r = await archivio.get(KEY);
     if(r && r.value) return migra(JSON.parse(r.value));
   }catch(e){ /* prima apertura: nessuna copia locale */ }
   return freshState();
@@ -653,7 +755,7 @@ let saveTimer = null;
 function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    try{ await window.storage.set(KEY, JSON.stringify(S)); }catch(e){}
+    try{ await archivio.set(KEY, JSON.stringify(S)); }catch(e){}
     await inviaStato();          // solo l'amministratore scrive sul database
   }, 350);
 }
@@ -824,7 +926,7 @@ function render(){
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   const v = document.getElementById("view");
   v.innerHTML = ({ rosa:viewRosa, scambi:viewScambi, riconferme:viewRiconferme, draft:viewDraft,
-                   classifica:viewClassifica, storico:viewStorico, picks:viewPicks, asta:viewAsta,
+                   classifica:viewClassifica, storico:viewStorico, albo:viewAlbo, picks:viewPicks, asta:viewAsta,
                    richieste:viewRichieste, mercato:viewMercato,
                    listone:viewListone, svincolati:viewSvincolati,
                    controlli:viewControlli, regole:viewRegole })[tab]();
@@ -875,18 +977,42 @@ function rowPlayer(p, stato){
     <span class="fl">${flag}</span></div>`;
 }
 
+/* ---- ordinamento delle rose ---- */
+let ordRosa = { k:null, dir:1 };
+const CHIAVI_ROSA = {
+  ruolo:  p => "PDCA".indexOf(p.ruolo||"") < 0 ? 9 : "PDCA".indexOf(p.ruolo),
+  nome:   p => norm(p.nome),
+  prezzo: p => p.prezzo ?? -1,
+  scad:   p => anniResidui(p) ?? 99,
+  stato:  p => fuoriSerieA(p) ? 0 : (anniResidui(p) ?? 9) <= 0 ? 1 : anniResidui(p) === 1 ? 2 : 3
+};
+function ordinaGiocatori(lista){
+  if(!ordRosa.k) return lista;
+  const f = CHIAVI_ROSA[ordRosa.k];
+  return lista.slice().sort((a,b) => {
+    const x = f(a), y = f(b);
+    return (x < y ? -1 : x > y ? 1 : 0) * ordRosa.dir;
+  });
+}
+function testaRosa(){
+  const c = (k, t) => `<span class="ordk ${ordRosa.k===k?"on":""}" data-ordrosa="${k}">${t}${ordRosa.k===k?(ordRosa.dir>0?" ▲":" ▼"):""}</span>`;
+  return `<div class="row thr">${c("ruolo","R")}${c("nome","Giocatore")}${c("prezzo","Prezzo")}${c("scad","Contratto")}${c("stato","!")}</div>`;
+}
+
 function blockRows(titolo, players, atteso){
   const over = atteso != null && players.length > atteso;
   const vuoti = atteso != null ? Math.max(0, atteso - players.length) : 0;
   const eccesso = over ? players.length - atteso : 0;
-  // i giocatori oltre il limite del reparto vanno segnalati, non nascosti
-  const righe = players.map((p,i) =>
-    rowPlayer(p, atteso != null && i >= atteso ? "eccedenza" : "")).join("");
+  // l'eccedenza si calcola sull'ordine d'arrivo, cosi riordinare non sposta i segnalati
+  const oltre = new Set(atteso != null ? players.slice(atteso).map(p => p.id) : []);
+  const righe = ordinaGiocatori(players).map(p =>
+    rowPlayer(p, oltre.has(p.id) ? "eccedenza" : "")).join("");
   const mancanti = Array.from({length:vuoti}, () => `<div class="row empty manca">
       <span class="rl">!</span><span>Manca un giocatore in questo reparto</span></div>`).join("");
   return `<div class="block">
     <div class="bhead ${over?"over":""} ${vuoti?"short":""}"><span class="t">${titolo}</span>
       <span class="c">${players.length}${atteso!=null?" / "+atteso:""}</span></div>
+    ${players.length > 1 ? testaRosa() : ""}
     ${righe || (atteso==null?`<div class="row empty manca"><span class="rl">·</span><span>Nessun giocatore</span></div>`:"")}
     ${mancanti}
     ${eccesso ? `<div class="notaflag over">${eccesso} ${eccesso===1?"giocatore":"giocatori"} oltre il limite: servono uno svincolo o uno scambio.</div>` : ""}
@@ -1043,6 +1169,7 @@ function viewDraft(){
     ${sonoAdmin()
       ? `<div class="btnrow"><button class="btn pri" id="btnLottery" ${mancanti?"disabled style='opacity:.45'":""}>${S.ultimoDraft?"Riestrai l'ordine":"Estrai ordine del draft"}</button></div>`
       : `<div class="hint" style="margin-top:12px">${S.ultimoDraft ? "L'ordine è stato estratto dall'amministratore. Quando tocca a te, premi Scegli sulla tua casella." : "L'amministratore non ha ancora estratto l'ordine."}</div>`}
+    ${salaDraft()}
     ${lavagnaDraft()}`;
 }
 
@@ -1061,14 +1188,19 @@ function lavagnaDraft(){
       const propr = S.squadre.find(s => s.id === pk.possessore);
       const scambiata = pk.possessore !== pk.origine;
       const liberi = propr ? Math.max(0, S.regole.slotPrimavera - occupatiVivaio(propr)) : 0;
+      const L = live(), t = L ? turnoCorrente() : null;
+      const attuale = t && t.pk.id === pk.id;
+      const saltata = L && (L.saltate || []).includes(pk.id) && !pk.assegnato;
+      const mioTurno = L ? puoScegliere(pk) : true;
       const azione = pk.assegnato
         ? `<span style="color:var(--good)">${esc(pk.assegnato)}</span>`
         : liberi <= 0
           ? `<span class="via">vivaio pieno</span>`
-          : (sonoAdmin() || pk.possessore === io?.squadra_id)
+          : saltata ? `<span class="via">saltata</span>`
+          : (sonoAdmin() || (pk.possessore === io?.squadra_id && mioTurno))
             ? `<button data-pick="${pk.id}">Scegli</button>`
-            : `<span class="via">in attesa</span>`;
-      return `<div class="pcell ${pk.assegnato?"presa":""}">
+            : `<span class="via">${attuale ? "di turno" : "in attesa"}</span>`;
+      return `<div class="pcell ${pk.assegnato?"presa":""} ${attuale?"attuale":""}">
         <span class="n">${g}.${i+1}</span>
         <span>${esc(propr ? propr.nome : "?")}${scambiata?`<div class="via">via ${esc(nomeSquadra(pk.origine))}</div>`:""}</span>
         <span class="via slot">${pk.assegnato ? "" : liberi + " slot liberi"}</span>
@@ -1151,19 +1283,20 @@ function apriScelta(pickId){
     if(!nome){ toast("Serve il nome del giocatore"); return; }
     const f = $("dFascia").value;
     const dur = S.regole.durataPrimavera[f] ?? 3;
+    const dati = { pickId: pk.id, nome, ruolo:$("dRuolo").value, club:$("dClub").value.trim(),
+      nato: $("dNato").value ? +$("dNato").value : null, fascia:f };
     if(!sonoAdmin()){
       if(pk.possessore !== io.squadra_id){ toast("Questa pick non è tua"); return; }
-      const ok = await inviaAzione("draft", { pickId: pk.id, nome, ruolo:$("dRuolo").value,
-        club:$("dClub").value.trim(), nato: $("dNato").value ? +$("dNato").value : null, fascia:f });
-      if(ok){ close(); toast("Scelta inviata all'amministratore"); }
+      if(live() && !puoScegliere(pk)){ toast("Non è ancora il tuo turno"); return; }
+      const ok = await inviaAzione("draft", dati);
+      if(ok){ close(); toast(live() ? "Scelta inviata, sta per essere annunciata" : "Scelta inviata all'amministratore"); }
       return;
     }
-    sq.rosa.push({ id:uid(), nome, ruolo:$("dRuolo").value, club:$("dClub").value.trim(),
-      prezzo:0, nato: $("dNato").value ? +$("dNato").value : null,
-      scadenza:`${anno+dur}-09-01`, reparto:"primavera", fascia:f });
-    pk.assegnato = nome;
+    const e = eseguiSceltaDraft(pk, dati);
+    if(e){ toast(e); return; }
     save(); close(); render();
-    toast(`${nome} al vivaio di ${sq.nome}, contratto fino al 2029`.replace("2029", String(anno+dur)));
+    if(live()) mostraAnnuncio(live().annuncio);
+    else toast(`${nome} al vivaio di ${sq.nome}, contratto fino al ${anno+dur}`);
   };
 }
 
@@ -1200,7 +1333,7 @@ function filtra(lista, conStato){
 
 function tabellaListone(righe, conProprietario){
   if(!righe.length) return `<div class="card"><div class="ok-empty">Nessun giocatore corrisponde ai filtri.</div></div>`;
-  const max = 400, mostrati = righe.slice(0, max);
+  const max = 1500, mostrati = righe.slice(0, max);
   return `<div class="card" style="padding:0;overflow:hidden">
     <table><thead><tr><th style="width:24px"></th><th>Giocatore</th><th>Club</th>
       <th class="num">Quotazione</th><th class="num">Iniziale</th><th class="num">FVM</th>
@@ -1599,10 +1732,83 @@ function viewClassifica(){
       <table><thead><tr><th style="width:38px">Pos</th><th>Squadra</th><th style="width:92px">Assegna</th>
         <th style="width:88px">Punti</th><th class="num">Riconferme</th><th class="num">Prob. 1ª scelta</th></tr></thead>
       <tbody>${righe}</tbody></table></div>
+    ${statoUfficiale()}
     ${sonoAdmin() ? `<div class="btnrow">
+      <button class="btn pri" id="btnUfficiale" ${assegnate < S.squadre.length ? "disabled style='opacity:.45'" : ""}>
+        ${S.ufficiali && S.ufficiali[S.annoStagione] ? "Aggiorna la classifica ufficiale" : "Ufficializza la classifica"}</button>
       <button class="btn" id="btnDaPunti">Ordina in base ai punti</button>
-      <button class="btn" id="btnAzzeraCl">Azzera la classifica</button></div>`
+      <button class="btn" id="btnAzzeraCl">Azzera la classifica</button>
+      ${S.ufficiali && S.ufficiali[S.annoStagione] ? `<button class="btn dgr" id="btnAnnullaUff">Annulla l'ufficialità</button>` : ""}</div>`
     : `<div class="hint" style="margin-top:12px">La classifica la inserisce l'amministratore: da qui determina quante riconferme spettano a ciascuno e l'ordine del draft.</div>`}`;
+}
+
+function statoUfficiale(){
+  const anno = S.annoStagione, quando = S.ufficiali && S.ufficiali[anno];
+  const st = `${anno}/${String(anno+1).slice(2)}`;
+  if(!quando) return `<div class="banner">La classifica ${st} non è ancora ufficiale: finché non la ufficializzi, palmarès e statistiche delle squadre non la contano.</div>`;
+  if(classificaCambiata(anno)) return `<div class="banner" style="border-left-color:var(--warn)">Classifica ${st} ufficializzata il ${esc(quando)}, ma nel frattempo è stata modificata. Aggiornala per far valere le nuove posizioni.</div>`;
+  return `<div class="banner" style="border-left-color:var(--good)">Classifica ${st} ufficiale dal ${esc(quando)}. Il piazzamento è già nel palmarès di ogni squadra.</div>`;
+}
+
+/* ================= ALBO DELLA LEGA ================= */
+let alboStagione = null;
+function viewAlbo(){
+  const stagioni = stagioniLega();
+  const med = S.squadre.map(sq => ({ sq, ...palmares(sq) }))
+    .sort((a,b) => b.primi - a.primi || b.secondi - a.secondi || b.terzi - a.terzi
+                   || (a.media ?? 99) - (b.media ?? 99));
+  const nomeAllora = (r) => r.nome && r.nome !== r.sq.nome
+    ? `${esc(r.sq.nome)} <span class="owner">allora ${esc(r.nome)}</span>` : esc(r.sq.nome);
+
+  if(!stagioni.length) return `<div class="thead"><div><h2>Albo della lega</h2>
+      <div class="pos">La storia della lega, stagione per stagione.</div></div></div>
+    <div class="card"><div class="ok-empty">Nessuna stagione in archivio. Si riempie quando ufficializzi una classifica,
+      oppure inserendo le stagioni passate dalla scheda di ogni squadra.</div></div>`;
+
+  const piuTitoli = med[0];
+  const podi = med.slice().sort((a,b) => (b.primi+b.secondi+b.terzi) - (a.primi+a.secondi+a.terzi))[0];
+  const media = med.filter(x => x.stagioni >= 2).sort((a,b) => a.media - b.media)[0];
+  const campione = stagioni[0].righe[0];
+  const rec = (t, v, d) => `<div class="rec"><div class="rec-t">${t}</div><div class="rec-v">${v}</div><div class="rec-d">${d}</div></div>`;
+
+  const sc = alboStagione && stagioni.find(x => x.anno === alboStagione) || stagioni[0];
+  const fmt = a => `${a}/${String(a+1).slice(2)}`;
+  return `<div class="thead"><div><h2>Albo della lega</h2>
+      <div class="pos">${stagioni.length} ${stagioni.length===1?"stagione":"stagioni"} in archivio. Tocca il nome di una squadra per aprirne la scheda.</div></div></div>
+    <div class="recs">
+      ${rec("Ultimo campione", esc(campione.sq.nome), fmt(stagioni[0].anno))}
+      ${rec("Più titoli", esc(piuTitoli.sq.nome), piuTitoli.primi + (piuTitoli.primi===1?" titolo":" titoli"))}
+      ${rec("Più podi", esc(podi.sq.nome), (podi.primi+podi.secondi+podi.terzi) + " podi")}
+      ${rec("Miglior media", media ? esc(media.sq.nome) : "—", media ? media.media + " di piazzamento" : "servono due stagioni")}
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Medagliere</span><span class="c">di sempre</span></div>
+      <table><thead><tr><th style="width:34px">#</th><th>Squadra</th>
+        <th class="num"><span class="mini-trf" style="color:#E9B33B">${COPPA}</span>Titoli</th>
+        <th class="num"><span class="mini-trf" style="color:#B9C4CE">${MEDAGLIA}</span>Secondi</th>
+        <th class="num"><span class="mini-trf" style="color:#C08552">${MEDAGLIA}</span>Terzi</th>
+        <th class="num">Stagioni</th><th class="num">Media</th><th class="num">Migliore</th></tr></thead>
+      <tbody>${med.map((x,i) => `<tr><td class="rank">${i+1}</td>
+        <td><button class="linksq" data-profilo="${x.sq.id}">${esc(x.sq.nome)}</button></td>
+        <td class="num"><b>${x.primi}</b></td><td class="num">${x.secondi}</td><td class="num">${x.terzi}</td>
+        <td class="num">${x.stagioni}</td><td class="num">${x.media ?? "—"}</td>
+        <td class="num">${x.migliore ? x.migliore+"º" : "—"}</td></tr>`).join("")}</tbody></table></div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Albo d'oro</span><span class="c">podio di ogni stagione</span></div>
+      <table><thead><tr><th>Stagione</th><th>Campione</th><th>Secondo</th><th>Terzo</th></tr></thead>
+      <tbody>${stagioni.map(x => `<tr><td>${fmt(x.anno)}</td>
+        ${[1,2,3].map(p => { const r = x.righe.find(y => y.posizione === p);
+          return `<td>${r ? nomeAllora(r) : "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="bhead"><span class="t">Classifica</span>
+        <select id="alboSel" style="font-size:13px">${stagioni.map(x =>
+          `<option value="${x.anno}" ${x.anno===sc.anno?"selected":""}>${fmt(x.anno)}</option>`).join("")}</select></div>
+      <table><thead><tr><th style="width:44px">Pos</th><th>Squadra</th><th class="num">Punti</th></tr></thead>
+      <tbody>${sc.righe.map(r => `<tr><td class="rank ${r.posizione<=3?"medal":""}">${r.posizione}º</td>
+        <td>${nomeAllora(r)}</td><td class="num">${r.punti ?? "—"}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 /* ================= STORICO ================= */
@@ -1901,13 +2107,12 @@ async function applicaAzione(id){
   }
   if(a.tipo === "draft"){
     const c = a.contenuto, pk = S.picks.find(p => p.id === c.pickId);
-    if(!pk || pk.assegnato){ toast("Quella pick non è più disponibile"); await decidi(id,"rifiutata","pick non disponibile"); render(); return; }
-    const sq = S.squadre.find(s => s.id === pk.possessore);
-    if(occupatiVivaio(sq) >= S.regole.slotPrimavera){ toast("Vivaio pieno"); await decidi(id,"rifiutata","vivaio pieno"); render(); return; }
-    const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
-    sq.rosa.push({ id:uid(), nome:c.nome, ruolo:c.ruolo, club:c.club, prezzo:0,
-      nato:c.nato ?? null, scadenza:`${pk.anno+dur}-09-01`, reparto:"primavera", fascia:c.fascia });
-    pk.assegnato = c.nome;
+    const e = eseguiSceltaDraft(pk, c);
+    if(e){ toast(e); await decidi(id, "rifiutata", e); render(); return; }
+    await decidi(id, "accettata");
+    save(); render();
+    if(live()) mostraAnnuncio(live().annuncio); else toast("Scelta registrata");
+    return;
   } else {
     const c = a.contenuto;
     const ia = S.squadre.findIndex(s => s.id === a.squadra_id);
@@ -2664,6 +2869,44 @@ function registraStagione(sq, anno){
   st.stagioni.push({ anno, posizione: sq.posizione, punti: sq.punti ?? null, nome: sq.nome });
 }
 
+// ufficializzare scrive il piazzamento nell'albo di ogni squadra;
+// se la stagione c'era gia viene sovrascritta, cosi una correzione e' sempre possibile
+function ufficializzaClassifica(anno){
+  const mancano = S.squadre.filter(sq => !sq.posizione);
+  if(mancano.length) return `Mancano ${mancano.length} posizioni in classifica`;
+  const pos = S.squadre.map(sq => sq.posizione);
+  if(new Set(pos).size !== pos.length) return "Due squadre hanno la stessa posizione";
+  S.squadre.forEach(sq => {
+    const st = storia(sq);
+    st.stagioni = st.stagioni.filter(x => x.anno !== anno);
+    st.stagioni.push({ anno, posizione: sq.posizione, punti: sq.punti ?? null, nome: sq.nome, ufficiale: true });
+  });
+  S.ufficiali = S.ufficiali || {};
+  S.ufficiali[anno] = new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" });
+  return null;
+}
+function annullaUfficiale(anno){
+  S.squadre.forEach(sq => { const st = storia(sq); st.stagioni = st.stagioni.filter(x => x.anno !== anno); });
+  if(S.ufficiali) delete S.ufficiali[anno];
+}
+// la classifica attuale coincide con quella gia ufficializzata?
+function classificaCambiata(anno){
+  if(!S.ufficiali || !S.ufficiali[anno]) return false;
+  return S.squadre.some(sq => {
+    const x = storia(sq).stagioni.find(y => y.anno === anno);
+    return !x || x.posizione !== sq.posizione || (x.punti ?? null) !== (sq.punti ?? null);
+  });
+}
+// tutte le stagioni della lega, ricostruite dagli albi delle squadre
+function stagioniLega(){
+  const m = {};
+  S.squadre.forEach(sq => storia(sq).stagioni.forEach(x => {
+    (m[x.anno] = m[x.anno] || []).push({ sq, posizione:x.posizione, punti:x.punti, nome:x.nome || sq.nome });
+  }));
+  return Object.keys(m).map(Number).sort((a,b) => b - a)
+    .map(anno => ({ anno, righe: m[anno].sort((a,b) => a.posizione - b.posizione) }));
+}
+
 function palmares(sq){
   const st = storia(sq);
   const c = p => st.stagioni.filter(x => x.posizione === p).length;
@@ -2780,6 +3023,218 @@ function apriProfilo(id){
   });
 }
 
+/* ================= SALA DEL DRAFT ================= */
+// S.draftLive = { attivo, modo:"auto"|"manuale", aperta:pickId|null, saltate:[], annuncio:{...} }
+const COLORI_MAGLIA = ["#C8102E","#0B3D91","#00754A","#F2A900","#5B2C83",
+                       "#E35205","#00859B","#26282B","#8A1538","#2E7D32"];
+function coloreSquadra(id){
+  const i = Math.max(0, S.squadre.findIndex(s => s.id === id));
+  return COLORI_MAGLIA[i % COLORI_MAGLIA.length];
+}
+const live = () => S.draftLive && S.draftLive.attivo ? S.draftLive : null;
+
+// tutte le scelte in ordine: giro dopo giro, con l'ordine estratto, chi possiede la pick sceglie
+function sequenzaDraft(){
+  const d = S.ultimoDraft;
+  if(!d) return [];
+  const anno = d.anno ?? annoDraft(), out = [];
+  for(let g = 1; g <= S.regole.giriPick; g++)
+    d.ordine.forEach((oid, i) => {
+      const pk = pickDi(anno, g, oid);
+      if(pk) out.push({ pk, n: out.length + 1, giro: g, pos: i + 1 });
+    });
+  return out;
+}
+function vivaioPieno(pk){
+  const sq = S.squadre.find(s => s.id === pk.possessore);
+  return !sq || occupatiVivaio(sq) >= S.regole.slotPrimavera;
+}
+// chi e' di turno: la prima pick non usata, non saltata, con posto nel vivaio
+function turnoCorrente(){
+  const L = live();
+  const saltate = new Set(L ? L.saltate || [] : []);
+  return sequenzaDraft().find(x => !x.pk.assegnato && !saltate.has(x.pk.id) && !vivaioPieno(x.pk)) || null;
+}
+function puoScegliere(pk){
+  const L = live(), t = turnoCorrente();
+  if(!L || !t || t.pk.id !== pk.id) return false;
+  return L.modo === "auto" || L.aperta === pk.id;
+}
+
+function avviaDraft(modo){
+  const prima = S.draftLive || {};
+  S.draftLive = { attivo:true, modo, aperta:null, saltate: prima.saltate || [], annuncio: prima.annuncio || null,
+    avviato: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
+  save(); render();
+}
+
+// unico punto in cui una scelta diventa realta: da qui parte anche l'annuncio
+function eseguiSceltaDraft(pk, c){
+  if(!pk || pk.assegnato) return "Quella pick non è più disponibile";
+  const sq = S.squadre.find(s => s.id === pk.possessore);
+  if(!sq) return "Squadra non trovata";
+  if(occupatiVivaio(sq) >= S.regole.slotPrimavera) return "Vivaio pieno";
+  if(!c.nome) return "Serve il nome del giocatore";
+  const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
+  sq.rosa.push({ id:uid(), nome:c.nome, ruolo:c.ruolo, club:c.club || "", prezzo:0,
+    nato:c.nato ?? null, scadenza:`${pk.anno+dur}-09-01`, reparto:"primavera", fascia:c.fascia });
+  pk.assegnato = c.nome;
+  const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
+  const L = live();
+  if(L){
+    L.annuncio = { ts: Date.now(), n: voce ? voce.n : null, giro: pk.giro, anno: pk.anno,
+      squadra: sq.id, nomeSquadra: sq.nome, nome: c.nome, ruolo: c.ruolo, club: c.club || "", fascia: c.fascia };
+    L.aperta = null;                          // in manuale serve di nuovo il via dell'amministratore
+  }
+  return null;
+}
+
+// l'app dell'amministratore applica da sola le scelte arrivate nel turno giusto
+let applicandoDraft = false;
+async function autoApplicaDraft(){
+  if(!sonoAdmin() || !live() || applicandoDraft) return;
+  applicandoDraft = true;
+  try{
+    for(const a of azioni.filter(x => x.tipo === "draft")){
+      const pk = S.picks.find(p => p.id === (a.contenuto || {}).pickId);
+      if(pk && puoScegliere(pk)){ await applicaAzione(a.id); break; }
+      if(pk && !pk.assegnato && turnoCorrente() && turnoCorrente().pk.id !== pk.id)
+        await decidi(a.id, "rifiutata", "non era il tuo turno");
+    }
+  } finally { applicandoDraft = false; }
+}
+
+/* ---- l'annuncio a tutto schermo ---- */
+const VOCE_KEY = "fantamanager:voce";
+const voceAttiva = () => { try{ return localStorage.getItem(VOCE_KEY) !== "no"; }catch(e){ return true; } };
+function parla(testo, ritardo){
+  if(!voceAttiva() || !("speechSynthesis" in window)) return;
+  setTimeout(() => {
+    try{
+      const u = new SpeechSynthesisUtterance(testo);
+      u.lang = "it-IT"; u.rate = 0.92; u.pitch = 0.9;
+      const v = speechSynthesis.getVoices().find(x => /^it/i.test(x.lang));
+      if(v) u.voice = v;
+      speechSynthesis.speak(u);
+    }catch(e){}
+  }, ritardo || 0);
+}
+function cognome(nome){
+  const t = String(nome || "").trim().split(/\s+/);
+  return (t.length > 1 && t[t.length-1].length <= 3 && /\.$/.test(t[t.length-1]) ? t[0] : t[t.length-1] || "").toUpperCase();
+}
+function maglia(a){
+  const col = coloreSquadra(a.squadra);
+  const chiaro = /^#F2A900$/i.test(col);
+  const tx = chiaro ? "#1A1A1A" : "#FFFFFF";
+  const cg = esc(cognome(a.nome)).slice(0, 12);
+  const fs = cg.length > 9 ? 17 : cg.length > 6 ? 21 : 25;
+  return `<svg viewBox="0 0 200 210" class="maglia" aria-hidden="true">
+    <path d="M62 14 L40 20 L6 52 L28 84 L44 72 L44 196 L156 196 L156 72 L172 84 L194 52 L160 20 L138 14
+             Q128 34 100 34 Q72 34 62 14 Z" fill="${col}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>
+    <path d="M62 14 Q72 34 100 34 Q128 34 138 14" fill="none" stroke="${tx}" stroke-width="5" opacity=".85"/>
+    <path d="M44 72 L28 84 M156 72 L172 84" stroke="rgba(0,0,0,.25)" stroke-width="2"/>
+    <text x="100" y="72" text-anchor="middle" font-family="Barlow Condensed,sans-serif"
+          font-weight="700" font-size="${fs}" letter-spacing="1.5" fill="${tx}">${cg}</text>
+    <text x="100" y="158" text-anchor="middle" font-family="Barlow Condensed,sans-serif"
+          font-weight="700" font-size="78" fill="${tx}">${a.n ?? ""}</text>
+  </svg>`;
+}
+function mostraAnnuncio(a){
+  if(!a) return;
+  try{ localStorage.setItem("fantamanager:annuncio", String(a.ts)); }catch(e){}
+  let host = document.getElementById("palco");
+  if(!host){ host = document.createElement("div"); host.id = "palco"; document.body.appendChild(host); }
+  const giro = `${a.giro}º giro`;
+  host.innerHTML = `<div class="palco" style="--col:${coloreSquadra(a.squadra)}">
+    <div class="luce"></div>
+    <div class="palco-in">
+      <div class="p-testa">Draft primavera ${a.anno} · ${giro}</div>
+      <div class="p-riga p1">Con la scelta numero <b>${a.n ?? "—"}</b></div>
+      <div class="p-riga p2"><span class="p-sq">${esc(a.nomeSquadra)}</span> seleziona</div>
+      <div class="p-rivela">
+        ${maglia(a)}
+        <div class="p-nome">${esc(a.nome)}</div>
+        <div class="p-info">
+          ${a.ruolo ? `<span class="p-chip">${RUOLO_NOME[a.ruolo] || a.ruolo}</span>` : ""}
+          ${a.fascia ? `<span class="p-chip">${esc(a.fascia)}</span>` : ""}
+          ${a.club ? `<span class="p-chip">${esc(a.club)}</span>` : ""}
+        </div>
+      </div>
+      <button class="p-chiudi" id="palcoChiudi">Chiudi</button>
+    </div></div>`;
+  const chiudi = () => { host.innerHTML = ""; try{ speechSynthesis.cancel(); }catch(e){} };
+  document.getElementById("palcoChiudi").onclick = chiudi;
+  clearTimeout(mostraAnnuncio.t);
+  mostraAnnuncio.t = setTimeout(chiudi, 14000);
+  parla(`Con la scelta numero ${a.n ?? ""} del draft ${a.anno}, ${a.nomeSquadra} seleziona`, 250);
+  parla(a.nome, 3500);
+}
+// all'arrivo di dati nuovi, l'annuncio parte solo se non l'ho gia visto ed e' recente
+function controllaAnnuncio(){
+  const a = live() && live().annuncio;
+  if(!a) return;
+  let visto = 0;
+  try{ visto = +(localStorage.getItem("fantamanager:annuncio") || 0); }catch(e){}
+  if(a.ts > visto && Date.now() - a.ts < 10 * 60 * 1000) mostraAnnuncio(a);
+}
+
+function salaDraft(){
+  if(!S.ultimoDraft) return "";
+  const L = live(), seq = sequenzaDraft(), t = turnoCorrente();
+  const fatte = seq.filter(x => x.pk.assegnato).length;
+  const voceBtn = `<button class="btn" id="btnVoce">${voceAttiva() ? "🔊 Voce attiva" : "🔇 Voce spenta"}</button>`;
+
+  if(!L) return `<div class="sala"><div class="sala-h"><h3>Sala del draft</h3><span class="owner">${fatte}/${seq.length} scelte fatte</span></div>
+    ${sonoAdmin() ? `<div class="hint">Scegli come condurlo. In automatico, appena una squadra sceglie tocca subito alla successiva.
+      In manuale sei tu a dare la parola a ogni squadra, una alla volta.</div>
+      <div class="btnrow"><button class="btn pri" data-avvia="auto">Avvia in automatico</button>
+        <button class="btn" data-avvia="manuale">Avvia in manuale</button>${voceBtn}</div>`
+    : `<div class="hint" style="margin:0">Il draft non è ancora cominciato: quando l'amministratore lo avvia, qui vedrai chi è di turno.</div>
+      <div class="btnrow">${voceBtn}</div>`}</div>`;
+
+  const ultime = seq.filter(x => x.pk.assegnato).slice(-4).reverse();
+  const prossime = seq.filter(x => !x.pk.assegnato && (!t || x.n > t.n) && !(L.saltate||[]).includes(x.pk.id)).slice(0, 5);
+  let centro;
+  if(!t){
+    centro = `<div class="sala-turno fine"><div class="st-n">Draft concluso</div>
+      <div class="st-sq">${fatte} giocatori scelti</div></div>`;
+  } else {
+    const sq = S.squadre.find(s => s.id === t.pk.possessore);
+    const mia = sq && sq.id === io?.squadra_id;
+    const aperta = L.modo === "auto" || L.aperta === t.pk.id;
+    const stato = aperta ? (mia ? "Tocca a te" : "Sta scegliendo") : "In attesa del via dell'amministratore";
+    centro = `<div class="sala-turno" style="--col:${coloreSquadra(sq.id)}">
+      <div class="st-n">Scelta n. ${t.n} · ${t.giro}º giro</div>
+      <div class="st-sq">${esc(sq.nome)}</div>
+      <div class="st-stato ${aperta?"on":""}">${stato}</div>
+      <div class="btnrow" style="justify-content:center">
+        ${mia && aperta && !sonoAdmin() ? `<button class="btn pri grande" data-pick="${t.pk.id}">Fai la tua scelta</button>` : ""}
+        ${sonoAdmin() && L.modo === "manuale" && !aperta ? `<button class="btn pri" id="btnParola">Dai la parola a ${esc(sq.nome)}</button>` : ""}
+        ${sonoAdmin() ? `<button class="btn" data-pick="${t.pk.id}">Scegli al suo posto</button>
+          <button class="btn" id="btnSalta">Salta questa scelta</button>` : ""}
+      </div></div>`;
+  }
+  return `<div class="sala">
+    <div class="sala-h"><h3>Sala del draft</h3>
+      <span class="owner">${L.modo === "auto" ? "automatico" : "manuale"} · ${fatte}/${seq.length} scelte</span></div>
+    ${centro}
+    <div class="sala-liste">
+      <div><div class="sl-t">Prossime</div>${prossime.map(x =>
+        `<div class="sl-r"><b>${x.n}</b> ${esc(nomeSquadra(x.pk.possessore))}</div>`).join("") || `<div class="sl-r owner">—</div>`}</div>
+      <div><div class="sl-t">Ultime scelte</div>${ultime.map(x =>
+        `<div class="sl-r"><b>${x.n}</b> ${esc(x.pk.assegnato)} <span class="owner">${esc(nomeSquadra(x.pk.possessore))}</span></div>`).join("") || `<div class="sl-r owner">—</div>`}</div>
+    </div>
+    <div class="btnrow">
+      ${voceBtn}
+      ${L.annuncio ? `<button class="btn" id="btnRivedi">Rivedi l'ultimo annuncio</button>` : ""}
+      ${sonoAdmin() ? `<button class="btn" id="btnModo">Passa in ${L.modo === "auto" ? "manuale" : "automatico"}</button>
+        <button class="btn dgr" id="btnFermaDraft">${t ? "Sospendi il draft" : "Chiudi il draft"}</button>` : ""}
+    </div>
+    ${sonoAdmin() ? `<div class="hint" style="margin:10px 0 0">Tieni aperta questa app durante il draft: è lei che registra le scelte dei manager appena arrivano.</div>` : ""}
+  </div>`;
+}
+
 function viewControlli(){
   const blocchi = S.squadre.map((s,i) => {
     const pb = problemi(s);
@@ -2850,6 +3305,14 @@ function bindView(){
     if(el.classList.contains("tbtn")) el.onclick = () => { sel = +el.dataset.team; menu(false); render(); };
   });
   document.querySelectorAll(".row[data-pl]").forEach(el => el.onclick = () => openPlayer(el.dataset.pl));
+  document.querySelectorAll("[data-ordrosa]").forEach(el => el.onclick = () => {
+    const k = el.dataset.ordrosa;
+    if(ordRosa.k !== k) ordRosa = { k, dir: 1 };
+    else if(ordRosa.dir > 0) ordRosa.dir = -1;
+    else ordRosa = { k:null, dir:1 };             // terzo clic: torna all'ordine originale
+    render();
+  });
+  collegaOrdinamenti();
   const add = document.getElementById("btnAdd");
   if(add) add.onclick = () => openPlayer(null);
   const bn = document.getElementById("btnNome");
@@ -2925,6 +3388,38 @@ function bindView(){
     if(v) S.squadre.forEach((t,n) => { if(n !== i && t.posizione === v) t.posizione = null; });
     S.squadre[i].posizione = v; save(); render();
   });
+  document.querySelectorAll("[data-avvia]").forEach(el => el.onclick = () => {
+    const m = el.dataset.avvia;
+    conferma(`Avviare il draft in ${m === "auto" ? "automatico" : "manuale"}?`,
+      m === "auto" ? "Appena una squadra sceglie, tocca subito alla successiva. Tieni aperta l'app per tutto il draft."
+                   : "Darai tu la parola a ogni squadra. Tieni aperta l'app per tutto il draft.",
+      () => { document.getElementById("modalHost").innerHTML = ""; avviaDraft(m); toast("Draft avviato"); });
+  });
+  const bv = document.getElementById("btnVoce");
+  if(bv) bv.onclick = () => {
+    try{ localStorage.setItem(VOCE_KEY, voceAttiva() ? "no" : "si"); }catch(e){}
+    if(voceAttiva()) parla("Voce attiva");            // il primo tocco sblocca l'audio sul telefono
+    render();
+  };
+  const bpa = document.getElementById("btnParola");
+  if(bpa) bpa.onclick = () => { const t = turnoCorrente(); if(!t) return;
+    live().aperta = t.pk.id; save(); render(); toast(`Parola a ${nomeSquadra(t.pk.possessore)}`); };
+  const bsa = document.getElementById("btnSalta");
+  if(bsa) bsa.onclick = () => { const t = turnoCorrente(); if(!t) return;
+    conferma(`Saltare la scelta n. ${t.n}?`, `${nomeSquadra(t.pk.possessore)} perde questa pick e si passa alla successiva.`,
+      () => { document.getElementById("modalHost").innerHTML = "";
+        const L = live(); L.saltate = L.saltate || []; L.saltate.push(t.pk.id); L.aperta = null;
+        save(); render(); toast("Scelta saltata"); }); };
+  const bri = document.getElementById("btnRivedi");
+  if(bri) bri.onclick = () => mostraAnnuncio(live().annuncio);
+  const bmo = document.getElementById("btnModo");
+  if(bmo) bmo.onclick = () => { const L = live(); L.modo = L.modo === "auto" ? "manuale" : "auto"; L.aperta = null;
+    save(); render(); toast(L.modo === "auto" ? "Draft in automatico" : "Draft in manuale"); };
+  const bfd = document.getElementById("btnFermaDraft");
+  if(bfd) bfd.onclick = () => conferma(turnoCorrente() ? "Sospendere il draft?" : "Chiudere il draft?",
+    "Le scelte fatte restano. Potrai riprendere da dove eri rimasto avviandolo di nuovo.",
+    () => { document.getElementById("modalHost").innerHTML = ""; S.draftLive.attivo = false; save(); render(); });
+
   const lot = document.getElementById("btnLottery");
   if(lot) lot.onclick = estraiDraft;
   document.querySelectorAll("button[data-pick]").forEach(b =>
@@ -2968,6 +3463,26 @@ function bindView(){
   if(ca2) ca2.onclick = () => conferma("Chiudere l'asta?",
     "Le rose restano come sono. L'asta finisce nello storico e potrai aprirne un'altra a febbraio.",
     () => { document.getElementById("modalHost").innerHTML = ""; chiudiAsta(); toast("Asta chiusa"); });
+
+  /* --- classifica ufficiale e albo --- */
+  const bu = document.getElementById("btnUfficiale");
+  if(bu) bu.onclick = () => {
+    const anno = S.annoStagione, gia = S.ufficiali && S.ufficiali[anno];
+    conferma(gia ? "Aggiornare la classifica ufficiale?" : `Ufficializzare la classifica ${anno}/${String(anno+1).slice(2)}?`,
+      "Il piazzamento di ogni squadra entra nel suo palmarès e nell'albo della lega. Potrai correggerla e riufficializzarla in qualsiasi momento.",
+      () => { const e = ufficializzaClassifica(anno);
+        document.getElementById("modalHost").innerHTML = "";
+        if(e){ toast(e); return; }
+        save(); render(); toast("Classifica ufficializzata"); });
+  };
+  const bau = document.getElementById("btnAnnullaUff");
+  if(bau) bau.onclick = () => conferma("Annullare l'ufficialità?",
+    "La stagione esce dal palmarès di tutte le squadre. Le posizioni che vedi restano.",
+    () => { annullaUfficiale(S.annoStagione); document.getElementById("modalHost").innerHTML = "";
+            save(); render(); toast("Ufficialità annullata"); });
+  const asel = document.getElementById("alboSel");
+  if(asel) asel.onchange = () => { alboStagione = +asel.value; render(); };
+  document.querySelectorAll("[data-profilo]").forEach(el => el.onclick = () => apriProfilo(el.dataset.profilo));
 
   /* --- classifica --- */
   document.querySelectorAll("input.punti").forEach(inp => inp.onchange = () => {
@@ -3134,6 +3649,56 @@ function bindView(){
     trade.ca = 0; trade.cb = 0; render();
   };
 }
+/* ---- ordinamento generico delle tabelle ---- */
+const ordTab = {};
+function valoreCella(td){
+  if(!td) return null;
+  if(td.dataset && td.dataset.v != null) { const n = +td.dataset.v; return isNaN(n) ? td.dataset.v : n; }
+  const inp = td.querySelector && td.querySelector("input[type=number],input:not([type]),input[type=text]");
+  let t = inp ? inp.value : (td.querySelector && td.querySelector("select")
+            ? td.querySelector("select").selectedOptions[0]?.textContent : td.textContent);
+  t = (t || "").trim();
+  if(!t || t === "—" || t === "-") return null;
+  const d = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(t);
+  if(d) return +(d[3].padStart(4,"20") + d[2].padStart(2,"0") + d[1].padStart(2,"0"));
+  const n = /^[-+]?\d+(?:[.,]\d+)?/.exec(t);
+  if(n) return parseFloat(n[0].replace(",", "."));
+  return t.toLowerCase();
+}
+function ordinaTabella(tab, col, dir){
+  const tb = tab.tBodies[0]; if(!tb) return;
+  const righe = [...tb.rows];
+  righe.sort((a,b) => {
+    const x = valoreCella(a.cells[col]), y = valoreCella(b.cells[col]);
+    if(x === null && y === null) return 0;
+    if(x === null) return 1;                     // i vuoti restano in fondo
+    if(y === null) return -1;
+    if(typeof x === "number" && typeof y === "number") return (x - y) * dir;
+    return String(x).localeCompare(String(y), "it") * dir;
+  });
+  righe.forEach(r => tb.appendChild(r));
+}
+function collegaOrdinamenti(){
+  document.querySelectorAll("#view table").forEach((tabella, i) => {
+    if(!tabella.tHead) return;
+    const key = tabKey() + ":" + i;
+    [...tabella.tHead.rows[0].cells].forEach((th, col) => {
+      if(!th.textContent.trim()) return;
+      th.classList.add("ordth");
+      const st = ordTab[key];
+      th.dataset.freccia = st && st.col === col ? (st.dir > 0 ? "▲" : "▼") : "";
+      th.onclick = () => {
+        const cur = ordTab[key];
+        ordTab[key] = cur && cur.col === col ? { col, dir: -cur.dir } : { col, dir: 1 };
+        collegaOrdinamenti();
+      };
+    });
+    const st = ordTab[key];
+    if(st) ordinaTabella(tabella, st.col, st.dir);
+  });
+}
+function tabKey(){ return tab + (tab === "rosa" || tab === "riconferme" ? ":" + sel : ""); }
+
 function deb(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
 function findPlayer(id){
@@ -3353,6 +3918,7 @@ function estraiDraft(){
     const s = S.squadre.find(x => x.posizione === pos);
     if(s) ordine.push(s.id);
   });
+  S.draftLive = null;
   S.ultimoDraft = { anno: annoDraft(), ordine,
     quando: new Date().toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"}) };
   save(); render(); toast("Ordine del draft estratto");
@@ -3445,6 +4011,10 @@ window.addEventListener("appinstalled", () => {
   toast("Fantamanager installata");
 });
 
+document.getElementById("btnEsci").onclick = () => conferma("Uscire?",
+  "Al prossimo accesso ti verra chiesto di nuovo il codice.",
+  async () => { try{ await archivio.del(CODICE_KEY); }catch(e){} location.reload(); });
+
 /* ---- avvio ---- */
 async function avvia(){
   S = await load();
@@ -3461,6 +4031,7 @@ async function avvia(){
   }catch(e){ toast("Collegamento non riuscito: " + (e.message||e)); }
   if(collegato){ await caricaAzioni(); await caricaConsegne(); await caricaMiaScelta();
                  await caricaMercato(); await caricaMessaggi(); await caricaPreferiti(); ascolta();
+                 if(sonoAdmin()) await autoApplicaDraft();
                  setInterval(async () => { await caricaMessaggi();
                    if(tab === "richieste" && !sonoAdmin()) render(); }, 30000); }
   if(!sonoAdmin()) tab = "rosa";
@@ -3471,7 +4042,7 @@ async function avvia(){
 (async () => {
   apriDb();
   let salvato = null;
-  try{ const r = await window.storage.get(CODICE_KEY); salvato = r && r.value; }catch(e){}
+  try{ const r = await archivio.get(CODICE_KEY); salvato = r && r.value; }catch(e){}
   if(salvato){
     try{ await entra(salvato); await avvia(); return; }catch(e){}
   }
