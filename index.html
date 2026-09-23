@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "23 set · primavera";
+const APP_VERSION = "23 set · ricomincia draft";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -3066,6 +3066,28 @@ function puoScegliere(pk){
   return L.modo === "auto" || L.aperta === pk.id;
 }
 
+function ricominciaDraft(){
+  let tolti = 0;
+  sequenzaDraft().forEach(({ pk }) => {
+    if(!pk.assegnato) return;
+    const sq = S.squadre.find(s => s.id === pk.possessore);
+    if(sq){
+      const prima = sq.rosa.length;
+      // se la scelta ricorda l'id uso quello; per le scelte vecchie ripiego sul nome in primavera
+      sq.rosa = pk.assegnatoId
+        ? sq.rosa.filter(p => p.id !== pk.assegnatoId)
+        : (() => { let fatto = false;
+            return sq.rosa.filter(p => {
+              if(!fatto && p.reparto === "primavera" && p.nome === pk.assegnato && !p.prezzo){ fatto = true; return false; }
+              return true; }); })();
+      tolti += prima - sq.rosa.length;
+    }
+    delete pk.assegnato; delete pk.assegnatoId;
+  });
+  S.draftLive = null;
+  return tolti;
+}
+
 function avviaDraft(modo){
   const prima = S.draftLive || {};
   S.draftLive = { attivo:true, modo, aperta:null, saltate: prima.saltate || [], annuncio: prima.annuncio || null,
@@ -3081,9 +3103,11 @@ function eseguiSceltaDraft(pk, c){
   if(occupatiVivaio(sq) >= S.regole.slotPrimavera) return "Vivaio pieno";
   if(!c.nome) return "Serve il nome del giocatore";
   const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
-  sq.rosa.push({ id:uid(), nome:c.nome, ruolo:c.ruolo, club:c.club || "", prezzo:0,
+  const nuovoId = uid();
+  sq.rosa.push({ id:nuovoId, nome:c.nome, ruolo:c.ruolo, club:c.club || "", prezzo:0,
     nato:c.nato ?? null, scadenza:`${pk.anno+dur}-09-01`, reparto:"primavera", fascia:c.fascia });
   pk.assegnato = c.nome;
+  pk.assegnatoId = nuovoId;
   const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
   const L = live();
   if(L){
@@ -3194,7 +3218,8 @@ function salaDraft(){
     ${sonoAdmin() ? `<div class="hint">Scegli come condurlo. In automatico, appena una squadra sceglie tocca subito alla successiva.
       In manuale sei tu a dare la parola a ogni squadra, una alla volta.</div>
       <div class="btnrow"><button class="btn pri" data-avvia="auto">Avvia in automatico</button>
-        <button class="btn" data-avvia="manuale">Avvia in manuale</button>${voceBtn}</div>`
+        <button class="btn" data-avvia="manuale">Avvia in manuale</button>${voceBtn}
+        ${fatte ? `<button class="btn dgr" id="btnRicomincia">Ricomincia il draft</button>` : ""}</div>`
     : `<div class="hint" style="margin:0">Il draft non è ancora cominciato: quando l'amministratore lo avvia, qui vedrai chi è di turno.</div>
       <div class="btnrow">${voceBtn}</div>`}</div>`;
 
@@ -3234,7 +3259,8 @@ function salaDraft(){
       ${voceBtn}
       ${L.annuncio ? `<button class="btn" id="btnRivedi">Rivedi l'ultimo annuncio</button>` : ""}
       ${sonoAdmin() ? `<button class="btn" id="btnModo">Passa in ${L.modo === "auto" ? "manuale" : "automatico"}</button>
-        <button class="btn dgr" id="btnFermaDraft">${t ? "Sospendi il draft" : "Chiudi il draft"}</button>` : ""}
+        <button class="btn dgr" id="btnFermaDraft">${t ? "Sospendi il draft" : "Chiudi il draft"}</button>
+        <button class="btn dgr" id="btnRicomincia">Ricomincia il draft</button>` : ""}
     </div>
     ${sonoAdmin() ? `<div class="hint" style="margin:10px 0 0">Tieni aperta questa app durante il draft: è lei che registra le scelte dei manager appena arrivano.</div>` : ""}
   </div>`;
@@ -3663,6 +3689,15 @@ function bindView(){
   const bmo = document.getElementById("btnModo");
   if(bmo) bmo.onclick = () => { const L = live(); L.modo = L.modo === "auto" ? "manuale" : "auto"; L.aperta = null;
     save(); render(); toast(L.modo === "auto" ? "Draft in automatico" : "Draft in manuale"); };
+  const brc = document.getElementById("btnRicomincia");
+  if(brc) brc.onclick = () => {
+    const n = sequenzaDraft().filter(x => x.pk.assegnato).length;
+    conferma("Ricominciare il draft?",
+      `Le ${n} scelte fatte vengono annullate e i giocatori pescati escono dai vivai. L'ordine estratto resta lo stesso.`,
+      () => { document.getElementById("modalHost").innerHTML = "";
+        const t = ricominciaDraft(); save(); render();
+        toast(`Draft azzerato: ${t} giocatori tolti dai vivai, ordine invariato`); });
+  };
   const bfd = document.getElementById("btnFermaDraft");
   if(bfd) bfd.onclick = () => conferma(turnoCorrente() ? "Sospendere il draft?" : "Chiudere il draft?",
     "Le scelte fatte restano. Potrai riprendere da dove eri rimasto avviandolo di nuovo.",
