@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "23 set · draft dal vivo";
+const APP_VERSION = "23 set · primavera";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -657,7 +657,8 @@ function ascolta(){
     .on("postgres_changes", { event:"*", schema:"public", table:"stato" }, async () => {
       if(sonoAdmin()) return;                 // l'admin è la fonte, non si riallinea a sé stesso
       const nuovo = await scaricaStato();
-      if(nuovo){ S = nuovo; await caricaConsegne(); await caricaMiaScelta(); render();
+      if(nuovo){ S = nuovo; await caricaConsegne(); await caricaMiaScelta();
+                 await caricaConsegneP(); await caricaMiaSceltaP(); render();
                  if(live() && live().annuncio) controllaAnnuncio();
                  else toast("Dati aggiornati dall'amministratore"); }
     })
@@ -670,7 +671,7 @@ function ascolta(){
       if(tab === "mercato" || tab === "rosa") render();
     })
     .on("postgres_changes", { event:"*", schema:"public", table:"scelte" }, async () => {
-      await caricaConsegne();          // cambia solo il conto di chi ha consegnato
+      await caricaConsegne(); await caricaConsegneP();   // cambia solo il conto di chi ha consegnato
       if(tab === "riconferme") render();
     })
     .subscribe();
@@ -1044,6 +1045,10 @@ function viewRosa(){
 }
 
 function viewRiconferme(){
+  if(ricVista === "primavera") return viewRiconfermeP();
+  return selettoreRic() + viewRiconfermePrima();
+}
+function viewRiconfermePrima(){
   const sq = team();
   if(!finestra()) return riconfermeInattive();
   if(S.finestra.stato === "svelata") return viewRiconfermeChiuse(sq);
@@ -3235,6 +3240,206 @@ function salaDraft(){
   </div>`;
 }
 
+/* ================= RICONFERME DELLA PRIMAVERA ================= */
+// finestra separata da quella della prima squadra: gratuita, sui soli giovani,
+// con i limiti di fascia calcolati sulla stagione in cui i giovani resteranno
+let ricVista = "prima";            // "prima" oppure "primavera"
+let consegneP = [], miaSceltaP = null;
+
+const finestraP = () => S.finestraP || null;
+const finestraPAperta = () => !!(S.finestraP && S.finestraP.stato === "aperta");
+
+async function caricaConsegneP(){
+  if(!collegato || !finestraPAperta()){ consegneP = []; return; }
+  const { data } = await db.rpc("stato_scelte", { p_finestra: S.finestraP.id });
+  consegneP = data || [];
+}
+async function caricaMiaSceltaP(){
+  miaSceltaP = null;
+  if(!collegato || !finestraPAperta() || sonoAdmin()) return;
+  const { data } = await db.rpc("mia_scelta", { p_codice: codice, p_finestra: S.finestraP.id });
+  miaSceltaP = data || null;
+}
+const haConsegnatoP = id => consegneP.some(c => c.squadra_id === id);
+
+// un giovane si riconferma se ha almeno una stagione di contratto oltre quella in corso
+function riconfermabileP(p){
+  const a = anniResidui(p);
+  return p.reparto === "primavera" && a !== null && a >= 2;
+}
+function chiaveFascia(f){ return (f === "U21" || f === "U20" || f === "U21/U20") ? "U21/U20" : f; }
+const fasciaProssima = p => fasciaAvanzata(p, S.annoStagione + 1);
+
+function verificaRiconfermeP(sq, tenuti){
+  if(sq.riconfermePChiuse) return "Le riconferme della primavera sono già state applicate";
+  const no = tenuti.filter(p => !riconfermabileP(p));
+  if(no.length) return `${no[0].nome} ha il contratto in scadenza e non si può riconfermare`;
+  const conta = {};
+  tenuti.forEach(p => { const k = chiaveFascia(fasciaProssima(p)); if(k) conta[k] = (conta[k] || 0) + 1; });
+  for(const [k, lim] of Object.entries(S.regole.slotFascia)){
+    if((conta[k] || 0) > lim)
+      return `Nella prossima stagione avresti ${conta[k]} ${k}, il massimo è ${lim}`;
+  }
+  const occupati = tenuti.length + fuoriRosa(sq).length;
+  if(occupati > S.regole.slotPrimavera)
+    return `Il vivaio conterrebbe ${occupati} giocatori, fuori rosa compresi: il massimo è ${S.regole.slotPrimavera}`;
+  return null;
+}
+
+function applicaRiconfermeP(sq, ids){
+  const giovani = sq.rosa.filter(p => p.reparto === "primavera");
+  const tenuti = giovani.filter(p => ids.includes(p.id));
+  const err = verificaRiconfermeP(sq, tenuti);
+  if(err) return err;
+  sq.snapshotP = JSON.parse(JSON.stringify({ rosa: sq.rosa, svincolati: sq.svincolati || [] }));
+  sq.svincolati = sq.svincolati || [];
+  const liberati = giovani.filter(p => !ids.includes(p.id)).map(p => {
+    sq.svincolati.push({ nome:p.nome, prezzo:0, anno:S.annoStagione, motivo:"primavera" });
+    return { nome:p.nome, ruolo:p.ruolo, fascia:p.fascia, scelta: riconfermabileP(p) };
+  });
+  sq.rosa = sq.rosa.filter(p => p.reparto !== "primavera" || ids.includes(p.id));
+  tenuti.forEach(p => p.riconfermaP = false);
+  sq.riconfermePChiuse = {
+    quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }),
+    tenuti: tenuti.map(p => ({ nome:p.nome, ruolo:p.ruolo, fascia:p.fascia, dopo:fasciaProssima(p), scadenza:p.scadenza })),
+    liberati
+  };
+  return null;
+}
+function annullaRiconfermeP(sq){
+  if(!sq.riconfermePChiuse || !sq.snapshotP) return;
+  sq.rosa = sq.snapshotP.rosa; sq.svincolati = sq.snapshotP.svincolati;
+  delete sq.snapshotP; delete sq.riconfermePChiuse;
+}
+
+function apriFinestraP(nome){
+  S.finestraP = { id:"p" + Date.now(), nome, stato:"aperta",
+    apertaIl: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
+  S.squadre.forEach(sq => { delete sq.riconfermePChiuse; delete sq.snapshotP; });
+  save(); render();
+}
+async function svelaFinestraP(){
+  const { data, error } = await db.rpc("leggi_scelte", { p_codice: codice, p_finestra: S.finestraP.id });
+  if(error){ toast("Non riesco a leggere le scelte: " + error.message); return; }
+  const scelte = data || [];
+  S.finestraP.esiti = S.squadre.map(sq => {
+    const c = scelte.find(x => x.squadra_id === sq.id);
+    const err = applicaRiconfermeP(sq, c ? (c.contenuto.ids || []) : []);
+    return { id:sq.id, squadra:sq.nome, consegnata:!!c, errore:err,
+      tenuti: err ? 0 : sq.riconfermePChiuse.tenuti.length,
+      liberati: err ? 0 : sq.riconfermePChiuse.liberati.length };
+  });
+  S.finestraP.stato = "svelata";
+  S.finestraP.svelataIl = new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" });
+  save(); render();
+  await db.rpc("azzera_scelte", { p_codice: codice, p_finestra: S.finestraP.id });
+  await caricaConsegneP();
+  toast("Riconferme della primavera svelate");
+}
+function annullaFinestraP(){
+  S.squadre.forEach(sq => annullaRiconfermeP(sq));
+  S.finestraP.stato = "aperta"; delete S.finestraP.esiti;
+  save(); render(); toast("Svelamento annullato, la finestra è di nuovo aperta");
+}
+
+function selettoreRic(){
+  return `<div class="segmenti" style="margin:16px 0 0">
+    <button class="segbtn ${ricVista==="prima"?"on":""}" data-ricvista="prima">Prima squadra</button>
+    <button class="segbtn ${ricVista==="primavera"?"on":""}" data-ricvista="primavera">Primavera</button></div>`;
+}
+
+function viewRiconfermeP(){
+  const sq = team(), F = finestraP();
+  const titolo = F ? esc(F.nome) : "Riconferme della primavera";
+  const testa = (sotto, stats) => `${selettoreRic()}<div class="thead"><div><h2>${titolo}</h2><div class="pos">${sotto}</div></div>
+    ${stats ? `<div class="stats">${stats}</div>` : ""}</div>`;
+  const stat = (v, l, c) => `<div class="stat"><div class="v" ${c?`style="color:${c}"`:""}>${v}</div><div class="l">${l}</div></div>`;
+
+  // nessuna finestra
+  if(!F) return testa("Nessuna finestra aperta per la primavera.") + (sonoAdmin()
+    ? `<div class="card"><h3>Apri la finestra della primavera</h3>
+        <div class="hint">Ogni squadra sceglie in segreto quali giovani tenere. È gratuita e il contratto resta quello che è: scala da solo a inizio stagione. Chi ha il contratto in scadenza non si può tenere, e chi non viene riconfermato torna libero per il draft.</div>
+        <div class="f" style="max-width:340px"><label>Come la chiami</label>
+          <input id="fpNome" value="Primavera ${S.annoStagione+1}" maxlength="50"></div>
+        <div class="btnrow"><button class="btn pri" id="btnApriFP">Apri la finestra</button></div></div>`
+    : `<div class="card"><div class="ok-empty">Quando l'amministratore aprirà la finestra della primavera, sceglierai da qui quali giovani tenere.</div></div>`);
+
+  // svelata: riepilogo per tutti
+  if(F.stato === "svelata"){
+    const r = sq.riconfermePChiuse;
+    const esiti = F.esiti || [];
+    return testa(`${esc(sq.nome)} · svelate il ${esc(F.svelataIl || "")}`,
+        r ? stat(r.tenuti.length, "Tenuti") + stat(r.liberati.length, "Tornati liberi") : "")
+      + `<div class="card" style="padding:0;overflow:hidden">
+        <div class="bhead"><span class="t">Tutta la lega</span><span class="c">primavera</span></div>
+        <table><thead><tr><th>Squadra</th><th class="num">Tenuti</th><th class="num">Liberati</th><th>Nota</th></tr></thead>
+        <tbody>${esiti.map(e => `<tr class="${e.id===sq.id?"me":""}"><td>${esc(e.squadra)}</td>
+          <td class="num">${e.tenuti}</td><td class="num">${e.liberati}</td>
+          <td style="color:var(--tx-faint);font-size:12.5px">${e.errore ? esc(e.errore) : e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>
+      ${r ? `<div class="card" style="padding:0;overflow:hidden">
+        <div class="bhead"><span class="t">${esc(sq.nome)} · tenuti</span><span class="c">${r.tenuti.length}</span></div>
+        <table><thead><tr><th>Giocatore</th><th>Fascia</th><th>Prossima stagione</th><th>Scadenza</th></tr></thead>
+        <tbody>${r.tenuti.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(p.fascia||"—")}</td><td>${esc(p.dopo||"—")}</td>
+          <td>${p.scadenza ? "1/09/" + p.scadenza.slice(0,4) : "—"}</td></tr>`).join("")}</tbody></table></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="bhead"><span class="t">Tornati liberi</span><span class="c">${r.liberati.length}</span></div>
+        <table><thead><tr><th>Giocatore</th><th>Fascia</th><th>Motivo</th></tr></thead>
+        <tbody>${r.liberati.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(p.fascia||"—")}</td>
+          <td style="color:var(--tx-faint)">${p.scelta ? "non riconfermato" : "contratto in scadenza"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${sonoAdmin() ? `<div class="btnrow"><button class="btn dgr" id="btnAnnullaFP">Annulla lo svelamento</button>
+        <button class="btn" id="btnNuovaFP">Chiudi e prepara una nuova finestra</button></div>` : ""}`;
+  }
+
+  // aperta, vista amministratore
+  if(sonoAdmin()){
+    const pronte = S.squadre.filter(s => haConsegnatoP(s.id)).length;
+    return testa(`Aperta il ${esc(F.apertaIl)} · le scelte restano segrete fino allo svelamento`, stat(`${pronte}/${S.squadre.length}`, "Hanno consegnato"))
+      + `<div class="card" style="padding:0;overflow:hidden">
+        <table><thead><tr><th>Squadra</th><th class="num">Giovani</th><th class="num">Riconfermabili</th><th>Stato</th></tr></thead>
+        <tbody>${S.squadre.map(s => `<tr><td>${esc(s.nome)}</td>
+          <td class="num">${primavera(s).length}</td><td class="num">${primavera(s).filter(riconfermabileP).length}</td>
+          <td>${haConsegnatoP(s.id) ? `<span class="free">consegnata</span>` : `<span class="owner">in attesa</span>`}</td></tr>`).join("")}</tbody></table></div>
+      ${pronte < S.squadre.length ? `<div class="banner">Chi non consegna entro lo svelamento perde tutti i giovani della primavera: tornano liberi per il draft.</div>` : ""}
+      <div class="btnrow"><button class="btn pri" id="btnSvelaP">Svela le riconferme della primavera</button>
+        <button class="btn" id="btnChiudiFP">Chiudi senza svelare</button></div>`;
+  }
+
+  // aperta, vista manager
+  if(sq.id !== io?.squadra_id) return testa("Le scelte delle altre squadre restano nascoste fino allo svelamento.")
+    + `<div class="card"><div class="ok-empty">Torna sulla tua squadra per scegliere i tuoi giovani.</div></div>`;
+  const giovani = primavera(sq);
+  const scelti = giovani.filter(p => p.riconfermaP);
+  const e = scelti.length ? verificaRiconfermeP(sq, scelti) : null;
+  const conta = {}; scelti.forEach(p => { const k = chiaveFascia(fasciaProssima(p)); conta[k] = (conta[k]||0) + 1; });
+  const fasceStat = Object.entries(S.regole.slotFascia).map(([k, lim]) =>
+    stat(`${conta[k]||0}/${lim}`, k + " l'anno prossimo", (conta[k]||0) > lim ? "var(--bad)" : null)).join("");
+  const righe = giovani.map(p => {
+    const ok = riconfermabileP(p), a = anniResidui(p);
+    return `<tr>
+      <td>${ok ? `<input type="checkbox" class="rcp" data-pl="${p.id}" ${p.riconfermaP?"checked":""}>` : ""}</td>
+      <td style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</td>
+      <td>${esc(p.nome)}</td>
+      <td>${esc(p.fascia||"—")}</td>
+      <td>${esc(fasciaProssima(p)||"—")}</td>
+      <td data-v="${a ?? -1}">${a == null ? "—" : a <= 1 ? "in scadenza" : `${a} → ${a-1}`}</td>
+      <td style="color:var(--tx-faint);font-size:12.5px">${ok ? "" : "non riconfermabile"}</td></tr>`;
+  }).join("");
+  return testa(`${esc(sq.nome)} · gratuita, il contratto resta quello che è`, stat(scelti.length, "Scelti") + fasceStat)
+    + `<div class="banner">${miaSceltaP ? "Scelta consegnata. Puoi ancora cambiarla finché l'amministratore non svela."
+         : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
+    ${giovani.length ? `<div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Fascia</th>
+        <th>L'anno prossimo</th><th>Stagioni di contratto</th><th>Note</th></tr></thead>
+      <tbody>${righe}</tbody></table></div>`
+      : `<div class="card"><div class="ok-empty">Non hai giovani in primavera.</div></div>`}
+    ${e ? `<div class="err">${esc(e)}</div>` : ""}
+    <div class="btnrow">
+      <button class="btn pri" id="btnInviaSceltaP" ${e ? "disabled style='opacity:.45'" : ""}>
+        ${miaSceltaP ? "Aggiorna la mia scelta" : "Consegna le riconferme della primavera"}</button>
+      <button class="btn" id="btnClearRcP">Azzera selezione</button></div>
+    <div class="hint" style="margin-top:10px;max-width:70ch">Consegnando senza spuntare nessuno, tutti i tuoi giovani tornano liberi. I fuori rosa non sono coinvolti.</div>`;
+}
+
 function viewControlli(){
   const blocchi = S.squadre.map((s,i) => {
     const pb = problemi(s);
@@ -3331,6 +3536,49 @@ function bindView(){
     p.quotazione = (v === null || v === quotazioneUfficiale(p)) ? null : v;
     save(); render();
   });
+  document.querySelectorAll("[data-ricvista]").forEach(el =>
+    el.onclick = () => { ricVista = el.dataset.ricvista; render(); });
+  document.querySelectorAll(".rcp").forEach(cb => cb.onchange = () => {
+    const p = findPlayer(cb.dataset.pl); if(p){ p.riconfermaP = cb.checked; render(); } });
+  const clp = document.getElementById("btnClearRcP");
+  if(clp) clp.onclick = () => { team().rosa.forEach(p => p.riconfermaP = false); render(); };
+  const afp = document.getElementById("btnApriFP");
+  if(afp) afp.onclick = () => {
+    const nome = (document.getElementById("fpNome").value || "").trim() || "Primavera";
+    conferma(`Aprire "${nome}"?`, "Ogni squadra sceglie in segreto quali giovani tenere. Le rose restano come sono finché non sveli.",
+      () => { document.getElementById("modalHost").innerHTML = ""; apriFinestraP(nome); toast("Finestra della primavera aperta"); });
+  };
+  const ivp = document.getElementById("btnInviaSceltaP");
+  if(ivp) ivp.onclick = async () => {
+    const sq = team();
+    const ids = sq.rosa.filter(p => p.reparto === "primavera" && p.riconfermaP).map(p => p.id);
+    const e = verificaRiconfermeP(sq, sq.rosa.filter(p => ids.includes(p.id)));
+    if(e){ toast(e); return; }
+    const { error } = await db.rpc("invia_scelta", { p_codice: codice, p_finestra: S.finestraP.id, p_contenuto: { ids } });
+    if(error){ toast("Invio non riuscito: " + error.message); return; }
+    await caricaMiaSceltaP(); await caricaConsegneP(); render();
+    toast(ids.length ? "Riconferme consegnate, restano segrete fino allo svelamento" : "Consegnato: nessun giovane tenuto");
+  };
+  const svp = document.getElementById("btnSvelaP");
+  if(svp) svp.onclick = () => {
+    const mancano = S.squadre.filter(s => !haConsegnatoP(s.id)).length;
+    conferma("Svelare le riconferme della primavera?",
+      (mancano ? `${mancano} squadre non hanno consegnato e perderanno tutti i giovani. ` : "")
+      + "I vivai si aggiornano per tutti nello stesso momento.",
+      async () => { document.getElementById("modalHost").innerHTML = ""; await svelaFinestraP(); });
+  };
+  const cfp = document.getElementById("btnChiudiFP");
+  if(cfp) cfp.onclick = () => conferma("Chiudere senza svelare?", "Le scelte consegnate vengono scartate e i vivai restano come sono.",
+    async () => { document.getElementById("modalHost").innerHTML = "";
+      if(collegato) await db.rpc("azzera_scelte", { p_codice: codice, p_finestra: S.finestraP.id });
+      S.finestraP = null; consegneP = []; miaSceltaP = null; save(); render(); toast("Finestra chiusa"); });
+  const anp = document.getElementById("btnAnnullaFP");
+  if(anp) anp.onclick = () => conferma("Annullare lo svelamento?",
+    "Tutti i vivai tornano com'erano e la finestra si riapre per rifare le scelte.",
+    () => { document.getElementById("modalHost").innerHTML = ""; annullaFinestraP(); });
+  const nfp = document.getElementById("btnNuovaFP");
+  if(nfp) nfp.onclick = () => { S.finestraP = null; S.squadre.forEach(sq => { delete sq.riconfermePChiuse; delete sq.snapshotP; });
+    save(); render(); };
   const af = document.getElementById("btnApriF");
   if(af) af.onclick = () => {
     const nome = (document.getElementById("fNome").value || "").trim() || "Riconferme";
@@ -4030,6 +4278,7 @@ async function avvia(){
     }
   }catch(e){ toast("Collegamento non riuscito: " + (e.message||e)); }
   if(collegato){ await caricaAzioni(); await caricaConsegne(); await caricaMiaScelta();
+                 await caricaConsegneP(); await caricaMiaSceltaP();
                  await caricaMercato(); await caricaMessaggi(); await caricaPreferiti(); ascolta();
                  if(sonoAdmin()) await autoApplicaDraft();
                  setInterval(async () => { await caricaMessaggi();
