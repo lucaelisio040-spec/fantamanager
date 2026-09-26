@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "26 set · scelte ritrovate";
+const APP_VERSION = "26 set · promozioni dalla primavera";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -780,6 +780,7 @@ function fuoriSerieA(p){ return !p.club; }
 // un giocatore è riconfermabile se resta almeno una stagione oltre quella corrente
 function riconfermabile(p){
   const a = anniResidui(p);
+  if(p.reparto === "prima" && p.promossoP) return true;   // promosso dalla primavera: riconferma d'ufficio
   return p.reparto === "prima" && a !== null && a >= 2 && !fuoriSerieA(p);
 }
 // indice per nome del listone, ricostruito solo quando il listone cambia
@@ -802,7 +803,9 @@ function voceListone(p){
 function quotazioneUfficiale(p){ const l = voceListone(p); return l ? l.qa : null; }
 function quotazione(p){ return p.quotazione ?? quotazioneUfficiale(p); }
 
+const COSTO_PROMOSSO = 1;
 function costoRiconferma(p){
+  if(p.promossoP) return COSTO_PROMOSSO;
   return Math.max(p.prezzo || 0, quotazione(p) ?? 0);
 }
 function nRiconferme(sq){
@@ -1105,7 +1108,10 @@ function schedaManager(sq){
       <div class="card"><div class="ok-empty">Le scelte delle altre squadre restano nascoste fino allo svelamento. Torna sulla tua squadra per fare le tue.</div></div>`;
 
   const lim = nRiconferme(sq);
-  const rosa = sq.rosa.filter(p => p.reparto === "prima").sort((a,b) => (b.prezzo||0) - (a.prezzo||0));
+  sq.rosa.forEach(p => { if(p.promossoP && p.reparto === "prima") p.riconferma = true; });
+  const rosa = sq.rosa.filter(p => p.reparto === "prima").sort((a,b) => (b.promossoP?1:0) - (a.promossoP?1:0) || (b.prezzo||0) - (a.prezzo||0));
+  const promossiQui = rosa.filter(p => p.promossoP);
+  const daAggiornare = miaScelta && promossiQui.some(p => !miaScelta.ids.includes(p.id));
   const scelti = rosa.filter(p => p.riconferma);
   const costo = scelti.reduce((n,p) => n + costoRiconferma(p), 0);
   const resta = S.regole.budget - costo;
@@ -1115,11 +1121,11 @@ function schedaManager(sq){
   const righe = rosa.map(p => {
     const ok = riconfermabile(p);
     const a = anniResidui(p);
-    const motivo = ok ? "" : (fuoriSerieA(p) ? "Fuori dalla Serie A" : (a !== null && a <= 1) ? "Contratto esaurito" : "Non disponibile");
+    const motivo = p.promossoP ? "promosso dalla primavera, riconferma d'ufficio" : ok ? "" : (fuoriSerieA(p) ? "Fuori dalla Serie A" : (a !== null && a <= 1) ? "Contratto esaurito" : "Non disponibile");
     const uff = quotazioneUfficiale(p), q = quotazione(p);
     const base = q != null && q > (p.prezzo || 0) ? "quotazione" : "prezzo d'acquisto";
     return `<tr>
-      <td>${ok ? `<input type="checkbox" class="rc" data-pl="${p.id}" ${p.riconferma?"checked":""}>` : ""}</td>
+      <td>${ok ? `<input type="checkbox" class="rc" data-pl="${p.id}" ${p.riconferma?"checked":""} ${p.promossoP?"disabled":""}>` : ""}</td>
       <td style="color:var(--${p.ruolo})">${p.ruolo}</td>
       <td>${esc(p.nome)}</td>
       <td style="color:var(--tx-faint)">${esc(p.club||"—")}</td>
@@ -1140,6 +1146,7 @@ function schedaManager(sq){
     <div class="banner">${inviata
       ? "Scelta consegnata. Puoi ancora modificarla e reinviarla finché l'amministratore non svela."
       : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
+    ${daAggiornare ? `<div class="banner" style="border-left-color:var(--warn)">Hai promosso dalla primavera ${promossiQui.map(p => esc(p.nome)).join(", ")} dopo aver consegnato: ora ${promossiQui.length === 1 ? "è" : "sono"} fra le tue riconferme. Controlla e premi "Aggiorna la mia scelta".</div>` : ""}
     ${riepilogoScelta(miaScelta, sq)}
     <div class="card" style="padding:0;overflow:hidden">
       <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Club</th>
@@ -1615,8 +1622,14 @@ function avanzaStagione(){
         if(prima === "U23" && p.fascia === "U23") report.oltreFascia.push(`${p.nome} (${sq.nome})`);
       }
       p.riconferma = false;
+      delete p.promossoP; delete p.promuoviP; delete p.riconfermaP;
     });
-    sq.crediti_residui = S.regole.budget;   // la dotazione si azzera e riparte
+    // la dotazione si azzera e riparte, ma le riconferme già fatte per la stagione
+    // che sta per iniziare restano pagate
+    const r = sq.riconfermeChiuse;
+    const giaPagato = r && r.anno === S.annoStagione && !r.passata ? r.costo : 0;
+    if(r && r.anno === S.annoStagione) r.passata = true;
+    sq.crediti_residui = S.regole.budget - giaPagato;
   });
   S.annoStagione = nuovo;
   // una nuova annata di picks entra in circolazione
@@ -1909,7 +1922,7 @@ function applicaRiconferme(sq, ids){
   sq.riconfermeChiuse = {
     quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }),
     anno: S.annoStagione, costo,
-    tenuti: tenuti.map(p => ({ nome:p.nome, ruolo:p.ruolo, prezzo:p.prezzo })),
+    tenuti: tenuti.map(p => ({ nome:p.nome, ruolo:p.ruolo, prezzo:p.prezzo, promosso: !!p.promossoP })),
     liberati
   };
   return null;
@@ -2468,16 +2481,23 @@ function applicaSceltaSalvata(scelta, reparto, campo){
   const sq = S.squadre.find(s => s.id === io?.squadra_id);
   if(!sq) return;
   sq.rosa.forEach(p => { if(p.reparto === reparto) p[campo] = scelta.ids.includes(p.id); });
+  if(reparto === "primavera")
+    sq.rosa.forEach(p => { if(p.reparto === "primavera") p.promuoviP = (scelta.promossi || []).includes(p.id); });
+  if(reparto === "prima") sq.rosa.forEach(p => { if(p.promossoP) p.riconferma = true; });
 }
 // riquadro con la scelta già consegnata
 function riepilogoScelta(scelta, sq){
   if(!scelta || !Array.isArray(scelta.ids)) return "";
-  const nomi = scelta.ids.map(id => sq.rosa.find(p => p.id === id)).filter(Boolean)
+  const elenco = ids => ids.map(id => sq.rosa.find(p => p.id === id)).filter(Boolean)
     .map(p => `<span style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span> ${esc(p.nome)}`);
+  const nomi = elenco(scelta.ids), prom = elenco(scelta.promossi || []);
   const quando = scelta.quando ? ` il ${esc(scelta.quando)}` : "";
   return `<div class="card" style="border-left:3px solid var(--good)">
     <div style="font-weight:600;margin-bottom:6px">La tua scelta consegnata${quando}</div>
+    ${prom.length ? `<div class="owner" style="margin-bottom:2px">Tenuti in primavera</div>` : ""}
     <div style="font-size:13.5px;line-height:1.7">${nomi.length ? nomi.join(" · ") : "Nessun giocatore tenuto"}</div>
+    ${prom.length ? `<div class="owner" style="margin:8px 0 2px">Promossi in prima squadra</div>
+      <div style="font-size:13.5px;line-height:1.7">${prom.join(" · ")}</div>` : ""}
     <div class="hint" style="margin-top:6px">Le spunte qui sotto ripartono da questa scelta. Se le cambi, ricordati di premere "Aggiorna la mia scelta".</div></div>`;
 }
 const haConsegnato = id => consegne.some(c => c.squadra_id === id);
@@ -2499,7 +2519,9 @@ async function svelaFinestra(){
   const esiti = [];
   S.squadre.forEach(sq => {
     const s = scelte.find(x => x.squadra_id === sq.id);
-    const ids = s ? (s.contenuto.ids || []) : [];
+    // i promossi dalla primavera sono riconfermati d'ufficio, anche se la squadra non ha consegnato
+    const promossi = sq.rosa.filter(p => p.reparto === "prima" && p.promossoP).map(p => p.id);
+    const ids = [...new Set([...(s ? (s.contenuto.ids || []) : []), ...promossi])];
     const err = applicaRiconferme(sq, ids);
     esiti.push({ squadra: sq.nome, id: sq.id, consegnata: !!s,
                  tenuti: err ? 0 : sq.riconfermeChiuse.tenuti.length,
@@ -2534,7 +2556,7 @@ function viewRiconfermeChiuse(sq){
   const esiti = S.finestra?.esiti || [];
   const riga = (p, cls) => `<tr class="${cls||""}"><td style="color:var(--${p.ruolo})">${p.ruolo}</td>
     <td>${esc(p.nome)}</td><td class="num">${p.prezzo ?? "—"}</td>
-    <td style="color:var(--tx-faint);font-size:12.5px">${cls ? (p.scelta ? "non riconfermato per scelta" : "contratto esaurito") : ""}</td></tr>`;
+    <td style="color:var(--tx-faint);font-size:12.5px">${cls ? (p.scelta ? "non riconfermato per scelta" : "contratto esaurito") : p.promosso ? "promosso dalla primavera" : ""}</td></tr>`;
   return `<div class="thead"><div><h2>Riconferme</h2>
       <div class="pos">${esc(sq.nome)} · operazione conclusa il ${esc(r.quando)}</div></div>
     <div class="stats">
@@ -2549,7 +2571,7 @@ function viewRiconfermeChiuse(sq){
       <table><thead><tr><th>Squadra</th><th class="num">Riconfermati</th><th class="num">Spesi</th><th>Nota</th></tr></thead>
       <tbody>${esiti.map(e => `<tr class="${e.id===sq.id?"me":""}"><td>${esc(e.squadra)}</td>
         <td class="num">${e.tenuti}</td><td class="num">${e.costo}</td>
-        <td style="color:var(--tx-faint);font-size:12.5px">${e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+        <td style="color:var(--tx-faint);font-size:12.5px">${e.errore ? esc(e.errore) : e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <div class="card" style="padding:0;overflow:hidden">
       <div class="bhead"><span class="t">Rimasti in rosa</span><span class="c">${r.tenuti.length}</span></div>
       <table><tbody>${r.tenuti.map(p => riga(p)).join("")}</tbody></table></div>
@@ -2558,6 +2580,8 @@ function viewRiconfermeChiuse(sq){
       <table><tbody>${r.liberati.map(p => riga(p,"lib")).join("")}</tbody></table></div>
     <div class="hint" style="max-width:70ch">Chi non è stato riconfermato per scelta torna disponibile per tutti, ma per riprenderlo all'asta dovrai offrire almeno un credito in più del prezzo indicato. Per chi aveva il contratto esaurito quel vincolo non vale.</div>
     <div class="btnrow">
+      ${sonoAdmin() && S.squadre.some(s => s.riconfermeChiuse?.anno === S.annoStagione)
+        ? `<button class="btn pri" id="btnNextF">Passa alla stagione ${S.annoStagione+1}/${String(S.annoStagione+2).slice(2)}</button>` : ""}
       ${sonoAdmin() ? `<button class="btn dgr" id="btnAnnullaF">Annulla lo svelamento</button>
           <button class="btn" id="btnNuovaF">Apri una nuova finestra</button>`
         : mio && !inAttesa ? `<button class="btn" id="btnChiediAnnullo">Richiesta di annullamento</button>` : ""}
@@ -3329,8 +3353,28 @@ function riconfermabileP(p){
 function chiaveFascia(f){ return (f === "U21" || f === "U20" || f === "U21/U20") ? "U21/U20" : f; }
 const fasciaProssima = p => fasciaAvanzata(p, S.annoStagione + 1);
 
-function verificaRiconfermeP(sq, tenuti){
+// si promuove qualunque giovane con un ruolo: il contratto riparte da zero, quindi la scadenza non conta
+const promuovibileP = p => p.reparto === "primavera" && !!p.ruolo;
+const scadenzaPromosso = () => `${S.annoStagione + 1 + S.regole.durataPrima}-09-01`;
+
+function verificaRiconfermeP(sq, tenuti, promossi = []){
   if(sq.riconfermePChiuse) return "Le riconferme della primavera sono già state applicate";
+  if(tenuti.some(p => promossi.includes(p))) return "Un giocatore non può essere sia tenuto in primavera sia promosso";
+  const np = promossi.find(p => !promuovibileP(p));
+  if(np) return `${np.nome} non ha un ruolo: chiedi all'amministratore di inserirlo prima di promuoverlo`;
+  if(promossi.length){
+    const lim = nRiconferme(sq);
+    const gia = sq.riconfermeChiuse ? sq.riconfermeChiuse.tenuti.length : 0;
+    if(gia + promossi.length > lim)
+      return `I promossi contano come riconferme della prima squadra: puoi arrivare al massimo a ${lim}${gia ? `, e ne hai già ${gia}` : ""}`;
+    for(const r of Object.keys(S.regole.rosa)){
+      const n = promossi.filter(p => p.ruolo === r).length;
+      const gia = sq.riconfermeChiuse ? reparto(sq, r).length : 0;
+      if(n && gia + n > S.regole.rosa[r]) return `Troppi ${RUOLO_NOME[r].toLowerCase()} in prima squadra: il massimo è ${S.regole.rosa[r]}`;
+    }
+    if(sq.riconfermeChiuse && sq.crediti_residui < promossi.length * COSTO_PROMOSSO)
+      return `Servono ${promossi.length * COSTO_PROMOSSO} crediti per i promossi, ne restano ${sq.crediti_residui}`;
+  }
   const no = tenuti.filter(p => !riconfermabileP(p));
   if(no.length) return `${no[0].nome} ha il contratto in scadenza e non si può riconfermare`;
   const conta = {};
@@ -3345,22 +3389,40 @@ function verificaRiconfermeP(sq, tenuti){
   return null;
 }
 
-function applicaRiconfermeP(sq, ids){
+function applicaRiconfermeP(sq, ids, idsPromossi = []){
   const giovani = sq.rosa.filter(p => p.reparto === "primavera");
-  const tenuti = giovani.filter(p => ids.includes(p.id));
-  const err = verificaRiconfermeP(sq, tenuti);
+  const promossi = giovani.filter(p => idsPromossi.includes(p.id));
+  const tenuti = giovani.filter(p => ids.includes(p.id) && !idsPromossi.includes(p.id));
+  const err = verificaRiconfermeP(sq, tenuti, promossi);
   if(err) return err;
-  sq.snapshotP = JSON.parse(JSON.stringify({ rosa: sq.rosa, svincolati: sq.svincolati || [] }));
+  sq.snapshotP = JSON.parse(JSON.stringify({ rosa: sq.rosa, svincolati: sq.svincolati || [],
+    crediti: sq.crediti_residui, riconfermeChiuse: sq.riconfermeChiuse || null }));
   sq.svincolati = sq.svincolati || [];
-  const liberati = giovani.filter(p => !ids.includes(p.id)).map(p => {
+  // chi sale entra in prima squadra come riconferma d'ufficio a 1 credito;
+  // il contratto riparte da tre stagioni a partire dalla prossima
+  const infoPromossi = promossi.map(p => {
+    const info = { nome:p.nome, ruolo:p.ruolo, fascia:p.fascia, scadenza: scadenzaPromosso() };
+    p.reparto = "prima"; p.fascia = null; p.riconfermaP = false; p.promuoviP = false;
+    p.scadenza = info.scadenza; p.promossoP = S.annoStagione; p.riconferma = true;
+    // se le riconferme della prima squadra sono già chiuse, lo aggiungo subito
+    if(sq.riconfermeChiuse){
+      p.prezzo = COSTO_PROMOSSO; p.riconferma = false;
+      sq.crediti_residui -= COSTO_PROMOSSO;
+      sq.riconfermeChiuse.costo += COSTO_PROMOSSO;
+      sq.riconfermeChiuse.tenuti.push({ nome:p.nome, ruolo:p.ruolo, prezzo:p.prezzo, promosso:true });
+    }
+    return info;
+  });
+  const liberati = giovani.filter(p => !ids.includes(p.id) && !idsPromossi.includes(p.id)).map(p => {
     sq.svincolati.push({ nome:p.nome, prezzo:0, anno:S.annoStagione, motivo:"primavera" });
     return { nome:p.nome, ruolo:p.ruolo, fascia:p.fascia, scelta: riconfermabileP(p) };
   });
   sq.rosa = sq.rosa.filter(p => p.reparto !== "primavera" || ids.includes(p.id));
-  tenuti.forEach(p => p.riconfermaP = false);
+  tenuti.forEach(p => { p.riconfermaP = false; p.promuoviP = false; });
   sq.riconfermePChiuse = {
     quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }),
     tenuti: tenuti.map(p => ({ nome:p.nome, ruolo:p.ruolo, fascia:p.fascia, dopo:fasciaProssima(p), scadenza:p.scadenza })),
+    promossi: infoPromossi,
     liberati
   };
   return null;
@@ -3368,6 +3430,10 @@ function applicaRiconfermeP(sq, ids){
 function annullaRiconfermeP(sq){
   if(!sq.riconfermePChiuse || !sq.snapshotP) return;
   sq.rosa = sq.snapshotP.rosa; sq.svincolati = sq.snapshotP.svincolati;
+  if(sq.snapshotP.crediti !== undefined){
+    sq.crediti_residui = sq.snapshotP.crediti;
+    if(sq.snapshotP.riconfermeChiuse) sq.riconfermeChiuse = sq.snapshotP.riconfermeChiuse;
+  }
   delete sq.snapshotP; delete sq.riconfermePChiuse;
 }
 
@@ -3383,9 +3449,10 @@ async function svelaFinestraP(){
   const scelte = data || [];
   S.finestraP.esiti = S.squadre.map(sq => {
     const c = scelte.find(x => x.squadra_id === sq.id);
-    const err = applicaRiconfermeP(sq, c ? (c.contenuto.ids || []) : []);
+    const err = applicaRiconfermeP(sq, c ? (c.contenuto.ids || []) : [], c ? (c.contenuto.promossi || []) : []);
     return { id:sq.id, squadra:sq.nome, consegnata:!!c, errore:err,
       tenuti: err ? 0 : sq.riconfermePChiuse.tenuti.length,
+      promossi: err ? 0 : (sq.riconfermePChiuse.promossi || []).length,
       liberati: err ? 0 : sq.riconfermePChiuse.liberati.length };
   });
   S.finestraP.stato = "svelata";
@@ -3428,18 +3495,24 @@ function viewRiconfermeP(){
     const r = sq.riconfermePChiuse;
     const esiti = F.esiti || [];
     return testa(`${esc(sq.nome)} · svelate il ${esc(F.svelataIl || "")}`,
-        r ? stat(r.tenuti.length, "Tenuti") + stat(r.liberati.length, "Tornati liberi") : "")
+        r ? stat(r.tenuti.length, "Tenuti") + stat((r.promossi||[]).length, "Promossi") + stat(r.liberati.length, "Tornati liberi") : "")
       + `<div class="card" style="padding:0;overflow:hidden">
         <div class="bhead"><span class="t">Tutta la lega</span><span class="c">primavera</span></div>
-        <table><thead><tr><th>Squadra</th><th class="num">Tenuti</th><th class="num">Liberati</th><th>Nota</th></tr></thead>
+        <table><thead><tr><th>Squadra</th><th class="num">Tenuti</th><th class="num">Promossi</th><th class="num">Liberati</th><th>Nota</th></tr></thead>
         <tbody>${esiti.map(e => `<tr class="${e.id===sq.id?"me":""}"><td>${esc(e.squadra)}</td>
-          <td class="num">${e.tenuti}</td><td class="num">${e.liberati}</td>
+          <td class="num">${e.tenuti}</td><td class="num">${e.promossi || 0}</td><td class="num">${e.liberati}</td>
           <td style="color:var(--tx-faint);font-size:12.5px">${e.errore ? esc(e.errore) : e.consegnata ? "" : "non ha consegnato"}</td></tr>`).join("")}</tbody></table></div>
       ${r ? `<div class="card" style="padding:0;overflow:hidden">
         <div class="bhead"><span class="t">${esc(sq.nome)} · tenuti</span><span class="c">${r.tenuti.length}</span></div>
         <table><thead><tr><th>Giocatore</th><th>Fascia</th><th>Prossima stagione</th><th>Scadenza</th></tr></thead>
         <tbody>${r.tenuti.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(p.fascia||"—")}</td><td>${esc(p.dopo||"—")}</td>
           <td>${p.scadenza ? "1/09/" + p.scadenza.slice(0,4) : "—"}</td></tr>`).join("")}</tbody></table></div>
+      ${(r.promossi||[]).length ? `<div class="card" style="padding:0;overflow:hidden">
+        <div class="bhead"><span class="t">Promossi in prima squadra</span><span class="c">${r.promossi.length}</span></div>
+        <table><thead><tr><th style="width:24px"></th><th>Giocatore</th><th>Era</th><th>Contratto</th></tr></thead>
+        <tbody>${r.promossi.map(p => `<tr><td style="color:var(--${p.ruolo})">${p.ruolo}</td><td>${esc(p.nome)}</td><td>${esc(p.fascia||"—")}</td>
+          <td>fino al 1/09/${p.scadenza.slice(0,4)}</td></tr>`).join("")}</tbody></table>
+        <div class="hint" style="padding:0 14px 12px">Entrano da soli fra le riconferme della prima squadra, a ${COSTO_PROMOSSO} credito ciascuno.</div></div>` : ""}
       <div class="card" style="padding:0;overflow:hidden">
         <div class="bhead"><span class="t">Tornati liberi</span><span class="c">${r.liberati.length}</span></div>
         <table><thead><tr><th>Giocatore</th><th>Fascia</th><th>Motivo</th></tr></thead>
@@ -3467,29 +3540,38 @@ function viewRiconfermeP(){
   if(sq.id !== io?.squadra_id) return testa("Le scelte delle altre squadre restano nascoste fino allo svelamento.")
     + `<div class="card"><div class="ok-empty">Torna sulla tua squadra per scegliere i tuoi giovani.</div></div>`;
   const giovani = primavera(sq);
-  const scelti = giovani.filter(p => p.riconfermaP);
-  const e = scelti.length ? verificaRiconfermeP(sq, scelti) : null;
+  const promossi = giovani.filter(p => p.promuoviP);
+  const scelti = giovani.filter(p => p.riconfermaP && !p.promuoviP);
+  const e = (scelti.length || promossi.length) ? verificaRiconfermeP(sq, scelti, promossi) : null;
   const conta = {}; scelti.forEach(p => { const k = chiaveFascia(fasciaProssima(p)); conta[k] = (conta[k]||0) + 1; });
   const fasceStat = Object.entries(S.regole.slotFascia).map(([k, lim]) =>
     stat(`${conta[k]||0}/${lim}`, k + " l'anno prossimo", (conta[k]||0) > lim ? "var(--bad)" : null)).join("");
   const righe = giovani.map(p => {
-    const ok = riconfermabileP(p), a = anniResidui(p);
+    const ok = riconfermabileP(p), su = promuovibileP(p), a = anniResidui(p);
+    const v = p.promuoviP ? "su" : p.riconfermaP ? "tieni" : "libera";
+    const nota = p.promuoviP ? `in prima squadra a ${COSTO_PROMOSSO} credito, contratto fino al 1/09/${scadenzaPromosso().slice(0,4)}`
+      : !ok && su ? "in scadenza: si può solo promuovere"
+      : !su ? (ok ? "senza ruolo: non si può promuovere" : "in scadenza e senza ruolo") : "";
     return `<tr>
-      <td>${ok ? `<input type="checkbox" class="rcp" data-pl="${p.id}" ${p.riconfermaP?"checked":""}>` : ""}</td>
+      <td>${ok || su ? `<select class="scp" data-pl="${p.id}" style="min-width:128px">
+        <option value="libera" ${v==="libera"?"selected":""}>Torna libero</option>
+        ${ok ? `<option value="tieni" ${v==="tieni"?"selected":""}>Riconferma</option>` : ""}
+        ${su ? `<option value="su" ${v==="su"?"selected":""}>Promuovi</option>` : ""}</select>` : ""}</td>
       <td style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</td>
       <td>${esc(p.nome)}</td>
       <td>${esc(p.fascia||"—")}</td>
       <td>${etaIncerta(p) ? `<span style="color:var(--warn)">U20 o U21?</span>` : esc(fasciaProssima(p)||"—")}</td>
       <td data-v="${a ?? -1}">${a == null ? "—" : a <= 1 ? "in scadenza" : `${a} → ${a-1}`}</td>
-      <td style="color:var(--tx-faint);font-size:12.5px">${ok ? "" : "non riconfermabile"}</td></tr>`;
+      <td style="color:var(--tx-faint);font-size:12.5px">${nota}</td></tr>`;
   }).join("");
-  return testa(`${esc(sq.nome)} · gratuita, il contratto resta quello che è`, stat(scelti.length, "Scelti") + fasceStat)
+  return testa(`${esc(sq.nome)} · gratuita, il contratto resta quello che è`, stat(scelti.length, "Tenuti") + fasceStat
+      + stat(`${promossi.length}/${nRiconferme(sq)}`, "Promossi", promossi.length > nRiconferme(sq) ? "var(--bad)" : null))
     + (giovani.some(etaIncerta) ? `<div class="banner" style="border-left-color:var(--warn)">${giovani.filter(etaIncerta).length} dei tuoi U20 non hanno l'anno di nascita: non si sa se l'anno prossimo saranno U20 o U21. Per il limite non cambia nulla, perché U20 e U21 contano insieme, ma chiedi all'amministratore di inserirlo.</div>` : "")
     + `<div class="banner">${miaSceltaP ? "Scelta consegnata. Puoi ancora cambiarla finché l'amministratore non svela."
          : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
     ${riepilogoScelta(miaSceltaP, sq)}
     ${giovani.length ? `<div class="card" style="padding:0;overflow:hidden">
-      <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Fascia</th>
+      <table><thead><tr><th style="width:140px">Scelta</th><th style="width:24px"></th><th>Giocatore</th><th>Fascia</th>
         <th>L'anno prossimo</th><th>Stagioni di contratto</th><th>Note</th></tr></thead>
       <tbody>${righe}</tbody></table></div>`
       : `<div class="card"><div class="ok-empty">Non hai giovani in primavera.</div></div>`}
@@ -3498,7 +3580,7 @@ function viewRiconfermeP(){
       <button class="btn pri" id="btnInviaSceltaP" ${e ? "disabled style='opacity:.45'" : ""}>
         ${miaSceltaP ? "Aggiorna la mia scelta" : "Consegna le riconferme della primavera"}</button>
       <button class="btn" id="btnClearRcP">Azzera selezione</button></div>
-    <div class="hint" style="margin-top:10px;max-width:70ch">Consegnando senza spuntare nessuno, tutti i tuoi giovani tornano liberi. I fuori rosa non sono coinvolti.</div>`;
+    <div class="hint" style="margin-top:10px;max-width:70ch">Chi promuovi sale in prima squadra ed entra da solo fra le tue riconferme della prima squadra, a ${COSTO_PROMOSSO} credito: occupa uno dei tuoi ${nRiconferme(sq)} posti. Il contratto riparte da ${S.regole.durataPrima} stagioni a partire dalla prossima. Chi lasci su "Torna libero" va al draft. I fuori rosa non sono coinvolti.</div>`;
 }
 
 let nasciteTutti = false;
@@ -3625,10 +3707,11 @@ function bindView(){
   });
   document.querySelectorAll("[data-ricvista]").forEach(el =>
     el.onclick = () => { ricVista = el.dataset.ricvista; render(); });
-  document.querySelectorAll(".rcp").forEach(cb => cb.onchange = () => {
-    const p = findPlayer(cb.dataset.pl); if(p){ p.riconfermaP = cb.checked; render(); } });
+  document.querySelectorAll(".scp").forEach(se => se.onchange = () => {
+    const p = findPlayer(se.dataset.pl);
+    if(p){ p.riconfermaP = se.value === "tieni"; p.promuoviP = se.value === "su"; render(); } });
   const clp = document.getElementById("btnClearRcP");
-  if(clp) clp.onclick = () => { team().rosa.forEach(p => p.riconfermaP = false); render(); };
+  if(clp) clp.onclick = () => { team().rosa.forEach(p => { p.riconfermaP = false; p.promuoviP = false; }); render(); };
   const afp = document.getElementById("btnApriFP");
   if(afp) afp.onclick = () => {
     const nome = (document.getElementById("fpNome").value || "").trim() || "Primavera";
@@ -3638,13 +3721,14 @@ function bindView(){
   const ivp = document.getElementById("btnInviaSceltaP");
   if(ivp) ivp.onclick = async () => {
     const sq = team();
-    const ids = sq.rosa.filter(p => p.reparto === "primavera" && p.riconfermaP).map(p => p.id);
-    const e = verificaRiconfermeP(sq, sq.rosa.filter(p => ids.includes(p.id)));
+    const promossi = sq.rosa.filter(p => p.reparto === "primavera" && p.promuoviP).map(p => p.id);
+    const ids = sq.rosa.filter(p => p.reparto === "primavera" && p.riconfermaP && !p.promuoviP).map(p => p.id);
+    const e = verificaRiconfermeP(sq, sq.rosa.filter(p => ids.includes(p.id)), sq.rosa.filter(p => promossi.includes(p.id)));
     if(e){ toast(e); return; }
-    const { error } = await db.rpc("invia_scelta", { p_codice: codice, p_finestra: S.finestraP.id, p_contenuto: { ids, quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) } });
+    const { error } = await db.rpc("invia_scelta", { p_codice: codice, p_finestra: S.finestraP.id, p_contenuto: { ids, promossi, quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) } });
     if(error){ toast("Invio non riuscito: " + error.message); return; }
     await caricaMiaSceltaP(); await caricaConsegneP(); render();
-    toast(ids.length ? "Riconferme consegnate, restano segrete fino allo svelamento" : "Consegnato: nessun giovane tenuto");
+    toast(ids.length || promossi.length ? "Riconferme consegnate, restano segrete fino allo svelamento" : "Consegnato: nessun giovane tenuto");
   };
   const svp = document.getElementById("btnSvelaP");
   if(svp) svp.onclick = () => {
@@ -3715,8 +3799,10 @@ function bindView(){
     team().rosa.forEach(p => p.quotazione = null); save(); render();
     toast("Quotazioni riallineate al listone");
   };
+  const bnf = document.getElementById("btnNextF");
+  if(bnf) bnf.onclick = () => document.getElementById("btnNext").onclick();
   const clr = document.getElementById("btnClearRc");
-  if(clr) clr.onclick = () => { team().rosa.forEach(p => p.riconferma = false); save(); render(); };
+  if(clr) clr.onclick = () => { team().rosa.forEach(p => p.riconferma = !!(p.promossoP && p.reparto === "prima")); save(); render(); };
 
   document.querySelectorAll("select.pos").forEach(s => s.onchange = () => {
     const i = +s.dataset.team, v = s.value ? +s.value : null;
@@ -4315,7 +4401,7 @@ function conferma(titolo, testo, ok){
 document.getElementById("btnNext").onclick = () => {
   const a = S.annoStagione + 1;
   conferma(`Passare alla stagione ${a}/${String(a+1).slice(2)}?`,
-    `I contratti giunti a termine liberano i giocatori, le fasce del vivaio salgono di un anno e i crediti tornano a ${S.regole.budget} per tutti. La stagione attuale viene archiviata, così puoi tornare indietro.`,
+    `I contratti giunti a termine liberano i giocatori, le fasce del vivaio salgono di un anno e i crediti tornano a ${S.regole.budget} per tutti, meno quanto già speso nelle riconferme. La stagione attuale viene archiviata, così puoi tornare indietro.`,
     () => { document.getElementById("modalHost").innerHTML = ""; avanzaStagione(); });
 };
 document.getElementById("btnPrev").onclick = () => { if(S.archivio && S.archivio.length) tornaIndietro(); };
