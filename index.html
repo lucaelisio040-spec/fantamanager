@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "23 set · fasce per età";
+const APP_VERSION = "26 set · scelte ritrovate";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -1140,6 +1140,7 @@ function schedaManager(sq){
     <div class="banner">${inviata
       ? "Scelta consegnata. Puoi ancora modificarla e reinviarla finché l'amministratore non svela."
       : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
+    ${riepilogoScelta(miaScelta, sq)}
     <div class="card" style="padding:0;overflow:hidden">
       <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Club</th>
         <th class="num">Acquisto</th><th class="num">Quotazione</th><th class="num">Costo</th><th>Note</th></tr></thead>
@@ -2459,6 +2460,25 @@ async function caricaMiaScelta(){
   if(!collegato || !finestraAperta() || sonoAdmin()) return;
   const { data } = await db.rpc("mia_scelta", { p_codice: codice, p_finestra: S.finestra.id });
   miaScelta = data || null;
+  applicaSceltaSalvata(miaScelta, "prima", "riconferma");
+}
+// rimette le spunte della scelta già consegnata, così chi rientra la ritrova
+function applicaSceltaSalvata(scelta, reparto, campo){
+  if(!scelta || !Array.isArray(scelta.ids)) return;
+  const sq = S.squadre.find(s => s.id === io?.squadra_id);
+  if(!sq) return;
+  sq.rosa.forEach(p => { if(p.reparto === reparto) p[campo] = scelta.ids.includes(p.id); });
+}
+// riquadro con la scelta già consegnata
+function riepilogoScelta(scelta, sq){
+  if(!scelta || !Array.isArray(scelta.ids)) return "";
+  const nomi = scelta.ids.map(id => sq.rosa.find(p => p.id === id)).filter(Boolean)
+    .map(p => `<span style="color:var(--${p.ruolo||"C"})">${p.ruolo||"·"}</span> ${esc(p.nome)}`);
+  const quando = scelta.quando ? ` il ${esc(scelta.quando)}` : "";
+  return `<div class="card" style="border-left:3px solid var(--good)">
+    <div style="font-weight:600;margin-bottom:6px">La tua scelta consegnata${quando}</div>
+    <div style="font-size:13.5px;line-height:1.7">${nomi.length ? nomi.join(" · ") : "Nessun giocatore tenuto"}</div>
+    <div class="hint" style="margin-top:6px">Le spunte qui sotto ripartono da questa scelta. Se le cambi, ricordati di premere "Aggiorna la mia scelta".</div></div>`;
 }
 const haConsegnato = id => consegne.some(c => c.squadra_id === id);
 
@@ -3297,6 +3317,7 @@ async function caricaMiaSceltaP(){
   if(!collegato || !finestraPAperta() || sonoAdmin()) return;
   const { data } = await db.rpc("mia_scelta", { p_codice: codice, p_finestra: S.finestraP.id });
   miaSceltaP = data || null;
+  applicaSceltaSalvata(miaSceltaP, "primavera", "riconfermaP");
 }
 const haConsegnatoP = id => consegneP.some(c => c.squadra_id === id);
 
@@ -3466,6 +3487,7 @@ function viewRiconfermeP(){
     + (giovani.some(etaIncerta) ? `<div class="banner" style="border-left-color:var(--warn)">${giovani.filter(etaIncerta).length} dei tuoi U20 non hanno l'anno di nascita: non si sa se l'anno prossimo saranno U20 o U21. Per il limite non cambia nulla, perché U20 e U21 contano insieme, ma chiedi all'amministratore di inserirlo.</div>` : "")
     + `<div class="banner">${miaSceltaP ? "Scelta consegnata. Puoi ancora cambiarla finché l'amministratore non svela."
          : "Nessuno vedrà le tue scelte finché l'amministratore non le svela tutte insieme."}</div>
+    ${riepilogoScelta(miaSceltaP, sq)}
     ${giovani.length ? `<div class="card" style="padding:0;overflow:hidden">
       <table><thead><tr><th style="width:34px"></th><th style="width:24px"></th><th>Giocatore</th><th>Fascia</th>
         <th>L'anno prossimo</th><th>Stagioni di contratto</th><th>Note</th></tr></thead>
@@ -3619,7 +3641,7 @@ function bindView(){
     const ids = sq.rosa.filter(p => p.reparto === "primavera" && p.riconfermaP).map(p => p.id);
     const e = verificaRiconfermeP(sq, sq.rosa.filter(p => ids.includes(p.id)));
     if(e){ toast(e); return; }
-    const { error } = await db.rpc("invia_scelta", { p_codice: codice, p_finestra: S.finestraP.id, p_contenuto: { ids } });
+    const { error } = await db.rpc("invia_scelta", { p_codice: codice, p_finestra: S.finestraP.id, p_contenuto: { ids, quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) } });
     if(error){ toast("Invio non riuscito: " + error.message); return; }
     await caricaMiaSceltaP(); await caricaConsegneP(); render();
     toast(ids.length ? "Riconferme consegnate, restano segrete fino allo svelamento" : "Consegnato: nessun giovane tenuto");
@@ -3658,7 +3680,7 @@ function bindView(){
     const e = verificaRiconferme(sq, sq.rosa.filter(p => ids.includes(p.id)));
     if(e){ toast(e); return; }
     const { error } = await db.rpc("invia_scelta",
-      { p_codice: codice, p_finestra: S.finestra.id, p_contenuto: { ids } });
+      { p_codice: codice, p_finestra: S.finestra.id, p_contenuto: { ids, quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) } });
     if(error){ toast("Invio non riuscito: " + error.message); return; }
     await caricaMiaScelta(); await caricaConsegne(); render();
     toast("Scelta consegnata, resta segreta fino allo svelamento");
