@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "26 set · promozioni dalla primavera";
+const APP_VERSION = "27 set · correzioni al draft";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -1208,18 +1208,22 @@ function lavagnaDraft(){
       const attuale = t && t.pk.id === pk.id;
       const saltata = L && (L.saltate || []).includes(pk.id) && !pk.assegnato;
       const mioTurno = L ? puoScegliere(pk) : true;
+      const adm = sonoAdmin();
       const azione = pk.assegnato
-        ? `<span style="color:var(--good)">${esc(pk.assegnato)}</span>`
+        ? `<span style="color:var(--good)">${esc(pk.assegnato)}</span>${adm ? ` <button data-modpick="${pk.id}">Modifica</button>` : ""}`
+        : pk.nulla
+          ? `<span class="via" style="color:var(--bad)" title="${esc(pk.nulla.nome ? "era " + pk.nulla.nome : "")}">chiamata nulla</span>${adm ? ` <button data-riprpick="${pk.id}">Ripristina</button>` : ""}`
+        : saltata && adm ? `<span class="via">saltata</span> <button data-riprpick="${pk.id}">Ripristina</button>`
         : liberi <= 0
           ? `<span class="via">vivaio pieno</span>`
           : saltata ? `<span class="via">saltata</span>`
           : (sonoAdmin() || (pk.possessore === io?.squadra_id && mioTurno))
             ? `<button data-pick="${pk.id}">Scegli</button>`
             : `<span class="via">${attuale ? "di turno" : "in attesa"}</span>`;
-      return `<div class="pcell ${pk.assegnato?"presa":""} ${attuale?"attuale":""}">
+      return `<div class="pcell ${pk.assegnato?"presa":""} ${attuale?"attuale":""}" ${pk.nulla?'style="opacity:.6"':""}>
         <span class="n">${g}.${i+1}</span>
         <span>${esc(propr ? propr.nome : "?")}${scambiata?`<div class="via">via ${esc(nomeSquadra(pk.origine))}</div>`:""}</span>
-        <span class="via slot">${pk.assegnato ? "" : liberi + " slot liberi"}</span>
+        <span class="via slot">${pk.assegnato || pk.nulla ? "" : liberi + " slot liberi"}</span>
         <span>${azione}</span></div>`;
     }).join("");
     const fatte = d.ordine.filter(oid => pickDi(anno,g,oid)?.assegnato).length;
@@ -1240,8 +1244,8 @@ function viewPicks(){
       const lista = mie.filter(p => p.anno === a);
       if(!lista.length) return "";
       return `<div class="anno"><div class="y">${a}</div><div class="cs">${lista.map(p =>
-        `<span class="pkc ${p.possessore!==p.origine?"acq":""} ${p.assegnato?"usata":""}"
-          title="${p.assegnato ? "già usata su " + esc(p.assegnato) : (p.possessore!==p.origine ? "acquisita da " + esc(nomeSquadra(p.origine)) : "pick propria")}"
+        `<span class="pkc ${p.possessore!==p.origine?"acq":""} ${p.assegnato||p.nulla?"usata":""}"
+          title="${p.assegnato ? "già usata su " + esc(p.assegnato) : p.nulla ? "chiamata dichiarata nulla" : (p.possessore!==p.origine ? "acquisita da " + esc(nomeSquadra(p.origine)) : "pick propria")}"
           >${esc(etichettaPick(p))}</span>`).join("")}</div></div>`;
     }).join("");
     return `<div class="pkcard"><header>${esc(s.nome)}</header>
@@ -1315,6 +1319,71 @@ function apriScelta(pickId){
     if(live()) mostraAnnuncio(live().annuncio);
     else toast(`${nome} al vivaio di ${sq.nome}, contratto fino al ${anno+dur}`);
   };
+}
+
+function apriModificaScelta(pickId){
+  const pk = S.picks.find(p => p.id === pickId);
+  if(!pk || !pk.assegnato) return;
+  const { sq, p } = giocatoreDaPick(pk);
+  const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
+  const anno = pk.anno, g = p || { nome: pk.assegnato };
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
+    <div class="mhead"><h3>Correggi la scelta n. ${voce ? voce.n : "—"} · ${pk.giro}º giro</h3>
+      <div class="s">${esc(sq ? sq.nome : "?")} · ora è <b>${esc(pk.assegnato)}</b></div></div>
+    <div class="mbody">
+      ${p ? `<div class="grid g2">
+        <div class="f" style="grid-column:1/-1"><label>Nome del giocatore</label><input id="dNome" value="${esc(g.nome)}"></div>
+        <div class="f"><label>Ruolo</label><select id="dRuolo">${RUOLI.map(r => `<option value="${r}" ${g.ruolo===r?"selected":""}>${RUOLO_NOME[r]}</option>`).join("")}</select></div>
+        <div class="f"><label>Club</label><input id="dClub" value="${esc(g.club||"")}"></div>
+        <div class="f"><label>Anno di nascita</label><input type="number" id="dNato" value="${g.nato ?? ""}" min="${anno-25}" max="${anno-15}"></div>
+        <div class="f"><label>Fascia</label><select id="dFascia">${FASCE.map(f => `<option ${g.fascia===f?"selected":""}>${f}</option>`).join("")}</select></div>
+      </div>
+      <div class="hint" id="dInfo" style="margin:12px 0 0"></div>`
+      : `<div class="err">Il giocatore non è più nel vivaio di ${esc(sq ? sq.nome : "?")}: puoi solo annullare la chiamata.</div>`}
+      <div class="card" style="margin:14px 0 0">
+        <h3 style="font-size:15px">Annullare la chiamata</h3>
+        <div class="hint">Il giocatore esce dal vivaio e torna libero. Poi scegli cosa succede alla pick.</div>
+        <div class="f"><label>Motivo, facoltativo</label><input id="dMotivo" maxlength="120" placeholder="es. giocatore non ammesso, fuori tempo"></div>
+        <div class="btnrow">
+          <button class="btn" id="dRifai">Annulla e fai rifare la scelta</button>
+          <button class="btn dgr" id="dNulla">Dichiara la chiamata nulla</button></div>
+        <div class="hint" style="margin:6px 0 0">Rifare: la pick torna disponibile e, a draft in corso, la squadra torna subito di turno.
+          Nulla: la pick è persa e il draft va avanti senza di lei.</div>
+      </div>
+    </div>
+    <div class="mfoot"><button class="btn" id="dNo">Chiudi</button>
+      ${p ? `<button class="btn pri" id="dSi">Salva la correzione</button>` : ""}</div></div></div>`;
+  const close = () => document.getElementById("modalHost").innerHTML = "";
+  const $ = id => document.getElementById(id);
+  if(p){
+    const aggiorna = () => {
+      const nato = $("dNato").value ? +$("dNato").value : null;
+      if(nato){ const f = fasciaEsatta({ nato }, anno); if(f) $("dFascia").value = f; }
+      const f = $("dFascia").value, dur = S.regole.durataPrimavera[f] ?? 3;
+      $("dInfo").innerHTML = `Fascia <b>${f}</b>: contratto di ${dur} ${dur===1?"stagione":"stagioni"}, scadenza 1/09/${anno+dur}.`;
+    };
+    $("dNato").oninput = aggiorna; $("dFascia").onchange = aggiorna; aggiorna();
+    $("dSi").onclick = () => {
+      const e = modificaSceltaDraft(pk, { nome:$("dNome").value.trim(), ruolo:$("dRuolo").value, club:$("dClub").value.trim(),
+        nato: $("dNato").value ? +$("dNato").value : null, fascia:$("dFascia").value });
+      if(e){ toast(e); return; }
+      save(); close(); render(); toast("Scelta corretta");
+    };
+  }
+  $("dNo").onclick = close;
+  $("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  const annulla = modo => {
+    const motivo = $("dMotivo").value.trim(), era = pk.assegnato;
+    conferma(modo === "nulla" ? `Dichiarare nulla la chiamata di ${era}?` : `Annullare la chiamata di ${era}?`,
+      modo === "nulla" ? `${era} esce dal vivaio e ${sq ? sq.nome : "la squadra"} perde questa pick.`
+                       : `${era} esce dal vivaio e ${sq ? sq.nome : "la squadra"} potrà rifare la scelta con la stessa pick.`,
+      () => { const e = annullaSceltaDraft(pk, modo, motivo);
+        if(e){ toast(e); return; }
+        save(); close(); render();
+        toast(modo === "nulla" ? "Chiamata dichiarata nulla" : "Chiamata annullata: la pick è di nuovo da fare"); });
+  };
+  $("dRifai").onclick = () => annulla("rifai");
+  $("dNulla").onclick = () => annulla("nulla");
 }
 
 /* ================= LISTONE ================= */
@@ -3114,7 +3183,7 @@ function vivaioPieno(pk){
 function turnoCorrente(){
   const L = live();
   const saltate = new Set(L ? L.saltate || [] : []);
-  return sequenzaDraft().find(x => !x.pk.assegnato && !saltate.has(x.pk.id) && !vivaioPieno(x.pk)) || null;
+  return sequenzaDraft().find(x => !x.pk.assegnato && !x.pk.nulla && !saltate.has(x.pk.id) && !vivaioPieno(x.pk)) || null;
 }
 function puoScegliere(pk){
   const L = live(), t = turnoCorrente();
@@ -3122,26 +3191,63 @@ function puoScegliere(pk){
   return L.modo === "auto" || L.aperta === pk.id;
 }
 
+// il giocatore arrivato con una pick: per id, e per le scelte vecchie per nome in primavera
+function giocatoreDaPick(pk){
+  const sq = S.squadre.find(s => s.id === pk.possessore);
+  if(!sq || !pk.assegnato) return { sq, p: null };
+  const p = (pk.assegnatoId && sq.rosa.find(x => x.id === pk.assegnatoId))
+    || sq.rosa.find(x => x.reparto === "primavera" && x.nome === pk.assegnato && !x.prezzo) || null;
+  return { sq, p };
+}
+// toglie dal vivaio il giocatore della pick e la lascia libera
+function liberaPick(pk){
+  const { sq, p } = giocatoreDaPick(pk);
+  if(sq && p) sq.rosa = sq.rosa.filter(x => x !== p);
+  delete pk.assegnato; delete pk.assegnatoId;
+  return !!p;
+}
 function ricominciaDraft(){
   let tolti = 0;
   sequenzaDraft().forEach(({ pk }) => {
+    delete pk.nulla;
     if(!pk.assegnato) return;
-    const sq = S.squadre.find(s => s.id === pk.possessore);
-    if(sq){
-      const prima = sq.rosa.length;
-      // se la scelta ricorda l'id uso quello; per le scelte vecchie ripiego sul nome in primavera
-      sq.rosa = pk.assegnatoId
-        ? sq.rosa.filter(p => p.id !== pk.assegnatoId)
-        : (() => { let fatto = false;
-            return sq.rosa.filter(p => {
-              if(!fatto && p.reparto === "primavera" && p.nome === pk.assegnato && !p.prezzo){ fatto = true; return false; }
-              return true; }); })();
-      tolti += prima - sq.rosa.length;
-    }
-    delete pk.assegnato; delete pk.assegnatoId;
+    if(liberaPick(pk)) tolti++;
   });
   S.draftLive = null;
   return tolti;
+}
+
+// correzione di una chiamata già fatta: stesso posto nell'ordine, dati nuovi
+function modificaSceltaDraft(pk, c){
+  if(!pk || !pk.assegnato) return "Questa pick non ha una scelta da modificare";
+  if(!c.nome) return "Serve il nome del giocatore";
+  const { p } = giocatoreDaPick(pk);
+  if(!p) return "Non trovo il giocatore nel vivaio: forse è stato spostato o ceduto";
+  const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
+  Object.assign(p, { nome:c.nome, ruolo:c.ruolo, club:c.club || "", nato:c.nato ?? null,
+    fascia:c.fascia, scadenza:`${pk.anno+dur}-09-01` });
+  pk.assegnato = c.nome;
+  const L = live();
+  const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
+  if(L && L.annuncio && voce && L.annuncio.n === voce.n)
+    Object.assign(L.annuncio, { nome:c.nome, ruolo:c.ruolo, club:c.club || "", fascia:c.fascia });
+  return null;
+}
+// annullo una chiamata: "rifai" la rimette in gioco, "nulla" la brucia
+function annullaSceltaDraft(pk, modo, motivo){
+  if(!pk || !pk.assegnato) return "Questa pick non ha una scelta da annullare";
+  const era = pk.assegnato;
+  liberaPick(pk);
+  if(modo === "nulla") pk.nulla = { nome: era, motivo: motivo || "",
+    quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) };
+  const L = live();
+  if(L) L.aperta = null;          // in manuale la parola la ridà l'amministratore
+  return null;
+}
+function ripristinaPick(pk){
+  delete pk.nulla;
+  const L = live();
+  if(L && L.saltate) L.saltate = L.saltate.filter(id => id !== pk.id);
 }
 
 function avviaDraft(modo){
@@ -3280,7 +3386,7 @@ function salaDraft(){
       <div class="btnrow">${voceBtn}</div>`}</div>`;
 
   const ultime = seq.filter(x => x.pk.assegnato).slice(-4).reverse();
-  const prossime = seq.filter(x => !x.pk.assegnato && (!t || x.n > t.n) && !(L.saltate||[]).includes(x.pk.id)).slice(0, 5);
+  const prossime = seq.filter(x => !x.pk.assegnato && !x.pk.nulla && (!t || x.n > t.n) && !(L.saltate||[]).includes(x.pk.id)).slice(0, 5);
   let centro;
   if(!t){
     centro = `<div class="sala-turno fine"><div class="st-n">Draft concluso</div>
@@ -3309,7 +3415,7 @@ function salaDraft(){
       <div><div class="sl-t">Prossime</div>${prossime.map(x =>
         `<div class="sl-r"><b>${x.n}</b> ${esc(nomeSquadra(x.pk.possessore))}</div>`).join("") || `<div class="sl-r owner">—</div>`}</div>
       <div><div class="sl-t">Ultime scelte</div>${ultime.map(x =>
-        `<div class="sl-r"><b>${x.n}</b> ${esc(x.pk.assegnato)} <span class="owner">${esc(nomeSquadra(x.pk.possessore))}</span></div>`).join("") || `<div class="sl-r owner">—</div>`}</div>
+        `<div class="sl-r"><b>${x.n}</b> ${esc(x.pk.assegnato)} <span class="owner">${esc(nomeSquadra(x.pk.possessore))}</span>${sonoAdmin() ? ` <button class="btn" style="padding:2px 8px;font-size:12px" data-modpick="${x.pk.id}">Modifica</button>` : ""}</div>`).join("") || `<div class="sl-r owner">—</div>`}</div>
     </div>
     <div class="btnrow">
       ${voceBtn}
@@ -3840,7 +3946,7 @@ function bindView(){
   if(brc) brc.onclick = () => {
     const n = sequenzaDraft().filter(x => x.pk.assegnato).length;
     conferma("Ricominciare il draft?",
-      `Le ${n} scelte fatte vengono annullate e i giocatori pescati escono dai vivai. L'ordine estratto resta lo stesso.`,
+      `Le ${n} scelte fatte vengono annullate, le chiamate nulle tornano valide e i giocatori pescati escono dai vivai. L'ordine estratto resta lo stesso.`,
       () => { document.getElementById("modalHost").innerHTML = "";
         const t = ricominciaDraft(); save(); render();
         toast(`Draft azzerato: ${t} giocatori tolti dai vivai, ordine invariato`); });
@@ -3854,6 +3960,11 @@ function bindView(){
   if(lot) lot.onclick = estraiDraft;
   document.querySelectorAll("button[data-pick]").forEach(b =>
     b.onclick = () => apriScelta(b.dataset.pick));
+  document.querySelectorAll("button[data-modpick]").forEach(b =>
+    b.onclick = () => apriModificaScelta(b.dataset.modpick));
+  document.querySelectorAll("button[data-riprpick]").forEach(b => b.onclick = () => {
+    const pk = S.picks.find(p => p.id === b.dataset.riprpick); if(!pk) return;
+    ripristinaPick(pk); save(); render(); toast("Pick di nuovo in gioco"); });
 
   document.querySelectorAll("input.rule").forEach(inp => inp.onchange = () => {
     set(S, inp.dataset.path, +inp.value); save(); render();
