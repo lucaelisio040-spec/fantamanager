@@ -549,12 +549,12 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "27 set · correzioni al draft";
+const APP_VERSION = "27 set · limiti di fascia al draft";
 
 const REGOLE_DEFAULT = {
   budget: 500,
   rosa: { P:3, D:8, C:8, A:6 },
-  slotPrimavera: 8,
+  slotPrimavera: 6,
   slotFascia: { U23:1, U22:2, "U21/U20":5 },
   durataPrima: 3,
   durataPrimavera: { U23:1, U22:2, U21:3, U20:4 },
@@ -816,8 +816,21 @@ function reparto(sq, r){ return sq.rosa.filter(p => p.reparto === "prima" && p.r
 function primavera(sq){ return sq.rosa.filter(p => p.reparto === "primavera"); }
 function fuoriRosa(sq){ return sq.rosa.filter(p => p.reparto === "fuori_rosa"); }
 function occupatiVivaio(sq){ return primavera(sq).length + fuoriRosa(sq).length; }
+// la fascia vera: dall'anno di nascita se c'e', altrimenti quella registrata
+function fasciaDi(p){ return (p.nato && fasciaEsatta(p, annoEta())) || p.fascia || null; }
 function contaFascia(sq, f){
-  return primavera(sq).filter(p => (f === "U21/U20" ? (p.fascia === "U21" || p.fascia === "U20" || p.fascia === "U21/U20") : p.fascia === f)).length;
+  return primavera(sq).filter(p => { const x = fasciaDi(p);
+    return f === "U21/U20" ? (x === "U21" || x === "U20" || x === "U21/U20") : x === f; }).length;
+}
+// posto libero nel vivaio per un giovane di quella fascia?
+function postoPerFascia(sq, fascia){
+  if(occupatiVivaio(sq) >= S.regole.slotPrimavera)
+    return `Vivaio di ${sq.nome} pieno: ${S.regole.slotPrimavera} slot su ${S.regole.slotPrimavera}, fuori rosa compresi`;
+  const k = (fascia === "U21" || fascia === "U20") ? "U21/U20" : fascia;
+  const lim = S.regole.slotFascia[k];
+  if(lim != null && contaFascia(sq, k) >= lim)
+    return `${sq.nome} ha già ${lim} ${k} su ${lim}: non può prenderne altri`;
+  return null;
 }
 function speso(sq){ return sq.rosa.filter(p => p.reparto === "prima").reduce((n,p) => n + (p.prezzo||0), 0); }
 
@@ -857,13 +870,18 @@ function etichettaPick(pk){
   const base = `${pk.giro}º ${pk.anno}`;
   return pk.origine === pk.possessore ? base : `${base} (via ${nomeSquadra(pk.origine)})`;
 }
-// anno del prossimo draft: si tiene prima dell'asta della stagione entrante
+// annata delle pick usate dal draft; il draft vale per la stagione in corso
+// (fasce e contratti si contano da S.annoStagione, non dall'etichetta delle pick)
 function annoDraft(){ return S.annoStagione + 1; }
+// l'eta che vale per la fascia e' quella che si compie nell'anno in cui finisce la stagione:
+// nella 2026/27 conta il 2027, quindi un 2004 e' U23
+const annoEta = (stagione = S.annoStagione) => stagione + 1;
 function pickDi(anno, giro, origineId){
   return S.picks.find(p => p.anno === anno && p.giro === giro && p.origine === origineId);
 }
 // a quale annata di nascita corrisponde ogni fascia, per la stagione indicata
-function fasceAnno(anno){
+function fasceAnno(stagione){
+  const anno = annoEta(stagione);
   return [["U23", anno-23, "23 anni"], ["U22", anno-22, "22 anni"],
           ["U21", anno-21, "21 anni"], ["U20", anno-20, "20 anni o meno"]];
 }
@@ -972,8 +990,8 @@ function rowPlayer(p, stato){
   if(fuoriSerieA(p)) flag = `<span title="Fuori dalla Serie A" style="color:var(--bad)">✕</span>`;
   else if(a !== null && a <= 0) flag = `<span title="Contratto scaduto" style="color:var(--bad)">▲</span>`;
   else if(a === 1) flag = `<span title="Ultimo anno di contratto" style="color:var(--warn)">▲</span>`;
-  const fasciaTag = p.reparto === "primavera" && p.fascia
-    ? `<span class="pill" style="background:#2A2036;color:#C89BE8">${p.fascia}</span>` : "";
+  const fasciaTag = p.reparto === "primavera" && fasciaDi(p)
+    ? `<span class="pill" style="background:#2A2036;color:#C89BE8">${fasciaDi(p)}</span>` : "";
   const frTag = p.reparto === "fuori_rosa" ? `<span class="pill" style="background:#20303C;color:#8FC4E0">fuori rosa</span>` : "";
   const cuore = ePreferito(p.id) ? `<span class="cuore on mini" title="Nella tua lista">♥</span>` : "";
   return `<div class="row ${stato||""}" data-pl="${p.id}">
@@ -1032,7 +1050,8 @@ function viewRosa(){
   const occ = occupatiVivaio(sq);
   const left = RUOLI.map(r => blockRows(RUOLO_NOME[r], reparto(sq,r), S.regole.rosa[r])).join("");
   const right = legendaFasce(S.annoStagione)
-              + blockRows("Primavera", primavera(sq), null)
+              + blockRows(`Primavera · ${Object.entries(S.regole.slotFascia).map(([k,l]) => `${k} ${contaFascia(sq,k)}/${l}`).join(" · ")}`,
+                  [...primavera(sq)].sort((a,b) => FASCE.indexOf(fasciaDi(a)) - FASCE.indexOf(fasciaDi(b))), null)
               + blockRows("Fuori rosa", fuoriRosa(sq), null)
               + ((sonoAdmin() || sq.id === io?.squadra_id) ? `<div class="card"><h3>${sonoAdmin() ? "Aggiungi giocatore" : "Chiedi un inserimento"}</h3>
                  <div class="hint">${sonoAdmin()
@@ -1176,7 +1195,8 @@ function viewDraft(){
   }).join("");
   return `<div class="thead"><div><h2>Draft primavera</h2>
       <div class="pos">Le prime tre classificate prendono le ultime tre scelte. Dalla quarta alla decima si estrae a sorte, con più probabilità a chi ha chiuso peggio.</div></div></div>
-    ${legendaFasce(annoDraft(), "chi scegli al draft deve rientrare in una di queste fasce")}
+    ${legendaFasce(S.annoStagione, "chi scegli al draft deve rientrare in una di queste fasce")}
+
     ${mancanti && sonoAdmin() ? `<div class="card" style="border-color:var(--warn)"><h3>Classifica incompleta</h3>
       <div class="hint" style="margin:0">Mancano ${mancanti} posizioni. Assegnale dalla scheda Classifica per poter estrarre l'ordine.</div></div>` : ""}
     <div class="card" style="padding:0;overflow:hidden">
@@ -1269,9 +1289,9 @@ function apriScelta(pickId){
   const pk = S.picks.find(p => p.id === pickId);
   if(!pk) return;
   const sq = S.squadre.find(s => s.id === pk.possessore);
-  const anno = pk.anno;
+  const anno = S.annoStagione, rif = annoEta();
   document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
-    <div class="mhead"><h3>Scelta ${pk.giro}º giro · ${anno}</h3>
+    <div class="mhead"><h3>Scelta ${pk.giro}º giro · ${pk.anno}</h3>
       <div class="s">${esc(sq.nome)}${pk.possessore!==pk.origine?` · pick arrivata da ${esc(nomeSquadra(pk.origine))}`:""}</div></div>
     <div class="mbody">
       ${legendaFasce(anno)}
@@ -1279,7 +1299,7 @@ function apriScelta(pickId){
         <div class="f" style="grid-column:1/-1"><label>Nome del giocatore</label><input id="dNome" placeholder="anche fuori listone"></div>
         <div class="f"><label>Ruolo</label><select id="dRuolo">${RUOLI.map(r => `<option value="${r}">${RUOLO_NOME[r]}</option>`).join("")}</select></div>
         <div class="f"><label>Club</label><input id="dClub"></div>
-        <div class="f"><label>Anno di nascita, obbligatorio</label><input type="number" id="dNato" min="${anno-25}" max="${anno-15}" placeholder="es. ${anno-20}"></div>
+        <div class="f"><label>Anno di nascita, obbligatorio</label><input type="number" id="dNato" min="${rif-25}" max="${rif-15}" placeholder="es. ${rif-20}"></div>
         <div class="f"><label>Fascia</label><select id="dFascia">${FASCE.map(f => `<option>${f}</option>`).join("")}</select></div>
       </div>
       <div class="hint" id="dInfo" style="margin:12px 0 0"></div>
@@ -1290,7 +1310,7 @@ function apriScelta(pickId){
   const $ = id => document.getElementById(id);
   const aggiorna = () => {
     const nato = $("dNato").value ? +$("dNato").value : null;
-    if(nato){ const f = fasciaEsatta({ nato }, anno); if(f) $("dFascia").value = f; }
+    if(nato){ const f = fasciaEsatta({ nato }, rif); if(f) $("dFascia").value = f; }
     const f = $("dFascia").value;
     const dur = S.regole.durataPrimavera[f] ?? 3;
     $("dInfo").innerHTML = `Fascia <b>${f}</b>: contratto di ${dur} ${dur===1?"stagione":"stagioni"}, scadenza 1/09/${anno+dur}.`;
@@ -1302,7 +1322,9 @@ function apriScelta(pickId){
     const nome = $("dNome").value.trim();
     if(!nome){ toast("Serve il nome del giocatore"); return; }
     if(!$("dNato").value){ toast("Serve l'anno di nascita: è lui a stabilire fascia e durata del contratto"); return; }
-    const f = $("dFascia").value;
+    const f = fasciaEsatta({ nato:+$("dNato").value }, rif) || $("dFascia").value;
+    const pieno = postoPerFascia(sq, f);
+    if(pieno){ toast(pieno); return; }
     const dur = S.regole.durataPrimavera[f] ?? 3;
     const dati = { pickId: pk.id, nome, ruolo:$("dRuolo").value, club:$("dClub").value.trim(),
       nato: $("dNato").value ? +$("dNato").value : null, fascia:f };
@@ -1326,7 +1348,7 @@ function apriModificaScelta(pickId){
   if(!pk || !pk.assegnato) return;
   const { sq, p } = giocatoreDaPick(pk);
   const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
-  const anno = pk.anno, g = p || { nome: pk.assegnato };
+  const anno = S.annoStagione, rif = annoEta(), g = p || { nome: pk.assegnato };
   document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal">
     <div class="mhead"><h3>Correggi la scelta n. ${voce ? voce.n : "—"} · ${pk.giro}º giro</h3>
       <div class="s">${esc(sq ? sq.nome : "?")} · ora è <b>${esc(pk.assegnato)}</b></div></div>
@@ -1335,7 +1357,7 @@ function apriModificaScelta(pickId){
         <div class="f" style="grid-column:1/-1"><label>Nome del giocatore</label><input id="dNome" value="${esc(g.nome)}"></div>
         <div class="f"><label>Ruolo</label><select id="dRuolo">${RUOLI.map(r => `<option value="${r}" ${g.ruolo===r?"selected":""}>${RUOLO_NOME[r]}</option>`).join("")}</select></div>
         <div class="f"><label>Club</label><input id="dClub" value="${esc(g.club||"")}"></div>
-        <div class="f"><label>Anno di nascita</label><input type="number" id="dNato" value="${g.nato ?? ""}" min="${anno-25}" max="${anno-15}"></div>
+        <div class="f"><label>Anno di nascita</label><input type="number" id="dNato" value="${g.nato ?? ""}" min="${rif-25}" max="${rif-15}"></div>
         <div class="f"><label>Fascia</label><select id="dFascia">${FASCE.map(f => `<option ${g.fascia===f?"selected":""}>${f}</option>`).join("")}</select></div>
       </div>
       <div class="hint" id="dInfo" style="margin:12px 0 0"></div>`
@@ -1358,7 +1380,7 @@ function apriModificaScelta(pickId){
   if(p){
     const aggiorna = () => {
       const nato = $("dNato").value ? +$("dNato").value : null;
-      if(nato){ const f = fasciaEsatta({ nato }, anno); if(f) $("dFascia").value = f; }
+      if(nato){ const f = fasciaEsatta({ nato }, rif); if(f) $("dFascia").value = f; }
       const f = $("dFascia").value, dur = S.regole.durataPrimavera[f] ?? 3;
       $("dInfo").innerHTML = `Fascia <b>${f}</b>: contratto di ${dur} ${dur===1?"stagione":"stagioni"}, scadenza 1/09/${anno+dur}.`;
     };
@@ -1687,7 +1709,7 @@ function avanzaStagione(){
       if(p.reparto === "primavera"){
         const prima = p.fascia;
         if(etaIncerta(p)) report.incerti = (report.incerti || []).concat(`${p.nome} (${sq.nome})`);
-        p.fascia = fasciaAvanzata(p, nuovo);
+        p.fascia = fasciaAvanzata(p, annoEta(nuovo));
         if(prima === "U23" && p.fascia === "U23") report.oltreFascia.push(`${p.nome} (${sq.nome})`);
       }
       p.riconferma = false;
@@ -3221,11 +3243,18 @@ function ricominciaDraft(){
 function modificaSceltaDraft(pk, c){
   if(!pk || !pk.assegnato) return "Questa pick non ha una scelta da modificare";
   if(!c.nome) return "Serve il nome del giocatore";
-  const { p } = giocatoreDaPick(pk);
+  const { sq, p } = giocatoreDaPick(pk);
   if(!p) return "Non trovo il giocatore nel vivaio: forse è stato spostato o ceduto";
+  if(c.nato){ const f = fasciaEsatta({ nato:c.nato }, annoEta()); if(f) c = { ...c, fascia:f }; }
+  if(c.fascia !== fasciaDi(p)){
+    const k = x => (x === "U21" || x === "U20") ? "U21/U20" : x;
+    const lim = S.regole.slotFascia[k(c.fascia)];
+    if(k(c.fascia) !== k(fasciaDi(p)) && lim != null && contaFascia(sq, k(c.fascia)) >= lim)
+      return `${sq.nome} ha già ${lim} ${k(c.fascia)} su ${lim}`;
+  }
   const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
   Object.assign(p, { nome:c.nome, ruolo:c.ruolo, club:c.club || "", nato:c.nato ?? null,
-    fascia:c.fascia, scadenza:`${pk.anno+dur}-09-01` });
+    fascia:c.fascia, scadenza:`${S.annoStagione+dur}-09-01` });
   pk.assegnato = c.nome;
   const L = live();
   const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
@@ -3262,12 +3291,14 @@ function eseguiSceltaDraft(pk, c){
   if(!pk || pk.assegnato) return "Quella pick non è più disponibile";
   const sq = S.squadre.find(s => s.id === pk.possessore);
   if(!sq) return "Squadra non trovata";
-  if(occupatiVivaio(sq) >= S.regole.slotPrimavera) return "Vivaio pieno";
   if(!c.nome) return "Serve il nome del giocatore";
+  if(c.nato){ const f = fasciaEsatta({ nato:c.nato }, annoEta()); if(f) c = { ...c, fascia:f }; }
+  const posto = postoPerFascia(sq, c.fascia);
+  if(posto) return posto;
   const dur = S.regole.durataPrimavera[c.fascia] ?? 3;
   const nuovoId = uid();
   sq.rosa.push({ id:nuovoId, nome:c.nome, ruolo:c.ruolo, club:c.club || "", prezzo:0,
-    nato:c.nato ?? null, scadenza:`${pk.anno+dur}-09-01`, reparto:"primavera", fascia:c.fascia });
+    nato:c.nato ?? null, scadenza:`${S.annoStagione+dur}-09-01`, reparto:"primavera", fascia:c.fascia });
   pk.assegnato = c.nome;
   pk.assegnatoId = nuovoId;
   const voce = sequenzaDraft().find(x => x.pk.id === pk.id);
@@ -3457,7 +3488,7 @@ function riconfermabileP(p){
   return p.reparto === "primavera" && a !== null && a >= 2;
 }
 function chiaveFascia(f){ return (f === "U21" || f === "U20" || f === "U21/U20") ? "U21/U20" : f; }
-const fasciaProssima = p => fasciaAvanzata(p, S.annoStagione + 1);
+const fasciaProssima = p => fasciaAvanzata(p, annoEta(S.annoStagione + 1));
 
 // si promuove qualunque giovane con un ruolo: il contratto riparte da zero, quindi la scadenza non conta
 const promuovibileP = p => p.reparto === "primavera" && !!p.ruolo;
@@ -4014,7 +4045,7 @@ function bindView(){
       const v = inp.value === "" ? null : +inp.value;
       if(v && (v < a - 30 || v > a - 12)) return;          // anno palesemente sbagliato: lo ignoro
       if(v !== (p.nato ?? null)){ p.nato = v; n++;
-        const f = fasciaEsatta(p, a);
+        const f = fasciaEsatta(p, annoEta(a));
         if(f && f !== p.fascia){ cambiate.push(`${p.nome} ${p.fascia || "—"} → ${f}`); p.fascia = f; } }
     });
     document.querySelectorAll("select.nruolo").forEach(sel => {
@@ -4432,7 +4463,7 @@ function openPlayer(id){
     p.nato = nn === "" ? null : +nn;
     p.reparto = document.getElementById("mRep").value;
     p.fascia = p.reparto === "primavera"
-      ? (fasciaEsatta(p, S.annoStagione) || document.getElementById("mFascia").value || null)
+      ? (fasciaEsatta(p, annoEta()) || document.getElementById("mFascia").value || null)
       : null;
     if(isNew){ delete p._nuovo; sq.rosa.push(p); }
     save(); close(); render();
@@ -4486,6 +4517,31 @@ function estraiDraft(){
   S.ultimoDraft = { anno: annoDraft(), ordine,
     quando: new Date().toLocaleString("it-IT",{dateStyle:"short",timeStyle:"short"}) };
   save(); render(); toast("Ordine del draft estratto");
+}
+
+// chi ha l'anno di nascita prende la fascia giusta per la stagione in corso
+function allineaFasce(){
+  const cambiate = [];
+  if(S.regole.slotPrimavera === 8 && !S.regole.slot6){ S.regole.slotPrimavera = 6; cambiate.push("vivaio a 6 slot"); }
+  S.regole.slot6 = true;
+  // le scelte gia fatte nel draft in corso avevano il contratto contato dalla stagione dopo
+  if(S.ultimoDraft && !S.ultimoDraft.contrattiOk && S.ultimoDraft.anno === S.annoStagione + 1){
+    sequenzaDraft().forEach(({ pk }) => {
+      const { p } = giocatoreDaPick(pk);
+      if(!p || p.reparto !== "primavera") return;
+      const f = fasciaDi(p), dur = S.regole.durataPrimavera[f] ?? 3;
+      const vecchia = `${pk.anno + (S.regole.durataPrimavera[p.fascia] ?? 3)}-09-01`;
+      const giusta = `${S.annoStagione + dur}-09-01`;
+      if(p.scadenza === vecchia && p.scadenza !== giusta){ p.scadenza = giusta; cambiate.push(`${p.nome} contratto al ${giusta.slice(0,4)}`); }
+    });
+    S.ultimoDraft.contrattiOk = true;
+  }
+  S.squadre.forEach(sq => sq.rosa.forEach(p => {
+    if(p.reparto !== "primavera" || !p.nato) return;
+    const f = fasciaEsatta(p, annoEta());
+    if(f && f !== p.fascia){ cambiate.push(`${p.nome} ${p.fascia || "—"} → ${f}`); p.fascia = f; }
+  }));
+  return cambiate;
 }
 
 /* ---- utility ---- */
@@ -4600,6 +4656,10 @@ async function avvia(){
                  setInterval(async () => { await caricaMessaggi();
                    if(tab === "richieste" && !sonoAdmin()) render(); }, 30000); }
   if(!sonoAdmin()) tab = "rosa";
+  if(sonoAdmin()){
+    const fc = allineaFasce();
+    if(fc.length){ save(); setTimeout(() => toast(`Sistemati: ${fc.slice(0,3).join(", ")}${fc.length > 3 ? ` e altri ${fc.length-3}` : ""}`), 1500); }
+  }
   render();
   if(sonoAdmin() && datiVecchi()) proponiAggiornamento();
 }
