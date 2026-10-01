@@ -549,7 +549,7 @@ const DEFAULT_DATA = {"stagione": "2025/26", "squadre": [{"id": "anadra_cafonada
 const DATA_VERSION = "2026-07-21c";
 // versione del programma, mostrata in basso a sinistra: serve a capire
 // al volo se il file caricato e' davvero l'ultimo
-const APP_VERSION = "27 set · limiti di fascia al draft";
+const APP_VERSION = "1 ott · asta forzata e crediti a mano";
 
 const REGOLE_DEFAULT = {
   budget: 500,
@@ -1062,7 +1062,7 @@ function viewRosa(){
       <div><h2><button class="titolosq" id="btnProfilo" title="Scheda della squadra">${esc(sq.nome)}</button>${(sonoAdmin() || sq.id === io?.squadra_id) ? ` <button class="matita" id="btnNome" title="Cambia il nome della squadra">✎</button>` : ""}</h2>
         <div class="pos">${sq.posizione ? sq.posizione+"º posto la scorsa stagione" : "Posizione non impostata"} · ${nRiconferme(sq)} riconferme disponibili</div></div>
       <div class="stats">
-        <div class="stat"><div class="v">${sq.crediti_residui}</div><div class="l">Crediti residui</div></div>
+        <div class="stat"><div class="v">${sq.crediti_residui}${sonoAdmin() ? ` <button class="matita" data-crediti="${sq.id}" title="Modifica i crediti">✎</button>` : ""}</div><div class="l">Crediti residui</div></div>
         <div class="stat"><div class="v">${speso(sq)}</div><div class="l">Impegnati in rosa</div></div>
         <div class="stat"><div class="v" style="color:${occ>S.regole.slotPrimavera?"var(--bad)":"inherit"}">${occ}/${S.regole.slotPrimavera}</div><div class="l">Slot vivaio</div></div>
       </div></div>
@@ -2884,15 +2884,18 @@ function verificaAcquisto(sq, l, prezzo){
   return null;
 }
 
-function registraAcquisto(sq, l, prezzo){
+// con forza l'amministratore assegna anche contro il regolamento (resta a verbale);
+// solo un giocatore gia tesserato non si puo assegnare due volte
+function registraAcquisto(sq, l, prezzo, forza){
   const err = verificaAcquisto(sq, l, prezzo);
-  if(err) return err;
+  if(err && (!forza || !astaAperta() || proprietario(l.nome))) return err;
   const g = { id:uid(), nome:l.nome, ruolo:l.ruolo, club:l.club, prezzo,
     scadenza:`${S.annoStagione + S.regole.durataPrima}-09-01`, reparto:"prima" };
   sq.rosa.push(g);
   sq.crediti_residui -= prezzo;
   S.asta.acquisti.push({ giocatore:g.id, nome:l.nome, ruolo:l.ruolo, squadra:sq.id, prezzo,
-    quando: new Date().toLocaleTimeString("it-IT",{ hour:"2-digit", minute:"2-digit" }) });
+    quando: new Date().toLocaleTimeString("it-IT",{ hour:"2-digit", minute:"2-digit" }),
+    ...(err ? { forzato: err } : {}) });
   return null;
 }
 
@@ -2934,7 +2937,7 @@ function viewAsta(){
     const m = RUOLI.map(r => `${r}${slotMancanti(s,r)}`).filter(x => !x.endsWith("0")).join(" ");
     return `<tr class="${io && s.id===io.squadra_id ? "me":""}">
       <td>${esc(s.nome)}</td>
-      <td class="num">${s.crediti_residui}</td>
+      <td class="num">${s.crediti_residui}${sonoAdmin() ? ` <button class="matita" data-crediti="${s.id}" title="Modifica i crediti">✎</button>` : ""}</td>
       <td class="num">${slotMancanti(s)}</td>
       <td class="num"><b>${massimoOfferibile(s)}</b></td>
       <td style="color:var(--tx-faint);font-size:12.5px">${m || "rosa completa"}</td></tr>`;
@@ -2944,7 +2947,7 @@ function viewAsta(){
     const vero = S.asta.acquisti.length - 1 - i;
     const sq = S.squadre.find(s => s.id === a.squadra);
     return `<tr><td style="color:var(--${a.ruolo})">${a.ruolo}</td><td>${esc(a.nome)}</td>
-      <td>${esc(sq?.nome || "—")}</td><td class="num">${a.prezzo}</td>
+      <td>${esc(sq?.nome || "—")}${a.forzato ? ` <span class="owner" style="color:var(--warn)" title="${esc(a.forzato)}">forzato</span>` : ""}</td><td class="num">${a.prezzo}</td>
       <td style="color:var(--tx-faint)">${esc(a.quando)}</td>
       <td>${sonoAdmin() ? `<button class="btn" data-annullaacq="${vero}">Annulla</button>` : ""}</td></tr>`;
   }).join("");
@@ -2987,7 +2990,8 @@ function pannelloAssegna(l){
       <td class="num">${slotMancanti(s, l.ruolo)}</td>
       <td class="num">${min > 1 ? `<b style="color:var(--warn)">${min}</b>` : min}</td>
       <td class="num">${massimoOfferibile(s)}</td>
-      <td>${err ? `<span class="owner">${esc(err.split(":")[0])}</span>`
+      <td>${err ? `<span class="owner" style="color:var(--warn)">${esc(err.split(":")[0])}</span>
+          ${proprietario(l.nome) ? "" : `<button class="btn" data-assegna="${i}" title="${esc(err)}">Assegna comunque</button>`}`
         : `<button class="btn pri" data-assegna="${i}">Assegna</button>`}</td></tr>`;
   }).join("");
   return `<div class="assegna">
@@ -2997,8 +3001,56 @@ function pannelloAssegna(l){
       <input type="number" id="aPrezzo" min="1" value="1"></div>
     <table><thead><tr><th>Squadra</th><th class="num">Crediti</th><th class="num">Slot ${l.ruolo}</th>
       <th class="num">Minimo</th><th class="num">Max</th><th></th></tr></thead><tbody>${righe}</tbody></table>
-    <div class="hint" style="margin-top:9px">Il minimo in ambra segnala chi deve rilanciare perché lo aveva svincolato. La colonna Max tiene già da parte un credito per ogni altro posto ancora scoperto.</div>
+    <div class="hint" style="margin-top:9px">Il minimo in ambra segnala chi deve rilanciare perché lo aveva svincolato. La colonna Max tiene già da parte un credito per ogni altro posto ancora scoperto. Dove il regolamento non lo consentirebbe puoi comunque assegnare: ti verrà chiesta conferma e l'acquisto resta segnato come forzato.</div>
   </div>`;
+}
+
+/* ================= CREDITI A MANO ================= */
+// l'amministratore corregge i crediti di una squadra; ogni modifica resta a verbale
+function modificaCrediti(sq, nuovo, motivo){
+  if(!Number.isFinite(nuovo)) return "Valore non valido";
+  nuovo = Math.round(nuovo);
+  const da = sq.crediti_residui;
+  if(nuovo === da) return "Il valore è già quello";
+  sq.crediti_residui = nuovo;
+  sq.movimentiCrediti = sq.movimentiCrediti || [];
+  sq.movimentiCrediti.push({ da, a:nuovo, motivo: motivo || "",
+    quando: new Date().toLocaleString("it-IT",{ dateStyle:"short", timeStyle:"short" }) });
+  return null;
+}
+function apriCrediti(id){
+  const sq = S.squadre.find(s => s.id === id);
+  if(!sq || !sonoAdmin()) return;
+  const storico = (sq.movimentiCrediti || []).slice(-6).reverse();
+  document.getElementById("modalHost").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="width:min(440px,100%)">
+    <div class="mhead"><h3>Crediti di ${esc(sq.nome)}</h3>
+      <div class="s">Ora ne ha <b>${sq.crediti_residui}</b>. La modifica vale subito per tutti.</div></div>
+    <div class="mbody">
+      <div class="grid g2">
+        <div class="f"><label>Nuovo totale</label><input type="number" id="cTot" value="${sq.crediti_residui}"></div>
+        <div class="f"><label>Oppure aggiungi o togli</label><input type="number" id="cDelta" placeholder="es. 10 oppure -5"></div>
+        <div class="f" style="grid-column:1/-1"><label>Motivo, facoltativo</label><input id="cMotivo" maxlength="120" placeholder="es. bonus, penalità, correzione"></div>
+      </div>
+      <div class="hint" id="cInfo" style="margin:10px 0 0"></div>
+      ${storico.length ? `<h3 style="font-size:14px;margin:14px 0 6px">Ultime modifiche</h3>
+        ${storico.map(m => `<div class="hint" style="margin:0 0 4px">${esc(m.quando)} · ${m.da} → <b>${m.a}</b>${m.motivo ? " · " + esc(m.motivo) : ""}</div>`).join("")}` : ""}
+    </div>
+    <div class="mfoot"><button class="btn" id="cNo2">Annulla</button><button class="btn pri" id="cSi2">Salva</button></div></div></div>`;
+  const $ = x => document.getElementById(x);
+  const close = () => $("modalHost").innerHTML = "";
+  const info = () => { const v = +$("cTot").value, d = v - sq.crediti_residui;
+    $("cInfo").innerHTML = Number.isFinite(v) && $("cTot").value !== "" ? `${sq.crediti_residui} → <b>${v}</b> (${d >= 0 ? "+" : ""}${d})` : ""; };
+  $("cDelta").oninput = () => { const d = +$("cDelta").value || 0; $("cTot").value = sq.crediti_residui + d; info(); };
+  $("cTot").oninput = () => { $("cDelta").value = ""; info(); };
+  info();
+  $("cNo2").onclick = close;
+  $("scrim").onclick = e => { if(e.target.id === "scrim") close(); };
+  $("cSi2").onclick = () => {
+    if($("cTot").value === ""){ toast("Inserisci un valore"); return; }
+    const e = modificaCrediti(sq, +$("cTot").value, $("cMotivo").value.trim());
+    if(e){ toast(e); return; }
+    save(); close(); render(); toast(`${sq.nome} ora ha ${sq.crediti_residui} crediti`);
+  };
 }
 
 /* ================= PROFILO SQUADRA ================= */
@@ -4024,11 +4076,17 @@ function bindView(){
     const sq = S.squadre[+el.dataset.assegna];
     const l = svincolati().find(x => x.nome === astaSel);
     const prezzo = +document.getElementById("aPrezzo").value || 0;
-    const e = registraAcquisto(sq, l, prezzo);
-    if(e){ toast(e); return; }
-    astaSel = null; astaCerca = "";
-    save(); render(); toast(`${l.nome} a ${sq.nome} per ${prezzo}`);
+    const fatto = forzato => { astaSel = null; astaCerca = "";
+      save(); render(); toast(`${l.nome} a ${sq.nome} per ${prezzo}${forzato ? " (forzato)" : ""}`); };
+    const e = verificaAcquisto(sq, l, prezzo);
+    if(!e){ const x = registraAcquisto(sq, l, prezzo); if(x){ toast(x); return; } fatto(false); return; }
+    if(proprietario(l.nome) || !astaAperta() || prezzo < 1){ toast(prezzo < 1 ? "Il prezzo deve essere almeno 1" : e); return; }
+    conferma(`Assegnare comunque ${l.nome} a ${sq.nome}?`,
+      `Il regolamento non lo consentirebbe: ${e}. Se confermi, l'acquisto viene registrato per ${prezzo} crediti e segnato come forzato.`,
+      () => { document.getElementById("modalHost").innerHTML = "";
+        const x = registraAcquisto(sq, l, prezzo, true); if(x){ toast(x); return; } fatto(true); });
   });
+  document.querySelectorAll("[data-crediti]").forEach(el => el.onclick = () => apriCrediti(el.dataset.crediti));
   document.querySelectorAll("[data-annullaacq]").forEach(el =>
     el.onclick = () => annullaAcquisto(+el.dataset.annullaacq));
   const ca2 = document.getElementById("btnChiudiAsta");
